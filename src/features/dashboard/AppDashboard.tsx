@@ -36,32 +36,34 @@ export function AppDashboard({
     <SidebarProvider
       style={
         {
-          "--sidebar-width": "18rem",
-          "--header-height": "3.75rem",
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 14)",
         } as CSSProperties
       }
+      className="min-h-screen bg-muted/40"
     >
-      <div className="flex min-h-screen w-full bg-muted/30">
-        <DashboardSidebar
-          activeTool={activeTool}
-          onToolChange={onToolChange}
-        />
+      <DashboardSidebar activeTool={activeTool} onToolChange={onToolChange} />
 
-        <SidebarInset className="min-w-0">
-          <DashboardTopbar activeTool={activeTool} />
+      <SidebarInset className="m-2 min-w-0 overflow-hidden rounded-2xl border bg-background shadow-sm md:m-3">
+        <DashboardTopbar activeTool={activeTool} />
 
-          <DashboardContent
-            activeTool={activeTool}
-            onToolChange={onToolChange}
-            cProjectState={cProjectState}
-            onCProjectStateChange={onCProjectStateChange}
-            callTreeState={callTreeState}
-            onCallTreeStateChange={onCallTreeStateChange}
-            dataDictionaryState={dataDictionaryState}
-            onDataDictionaryStateChange={onDataDictionaryStateChange}
-          />
-        </SidebarInset>
-      </div>
+        <div className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
+              <DashboardContent
+                activeTool={activeTool}
+                onToolChange={onToolChange}
+                cProjectState={cProjectState}
+                onCProjectStateChange={onCProjectStateChange}
+                callTreeState={callTreeState}
+                onCallTreeStateChange={onCallTreeStateChange}
+                dataDictionaryState={dataDictionaryState}
+                onDataDictionaryStateChange={onDataDictionaryStateChange}
+              />
+            </div>
+          </div>
+        </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

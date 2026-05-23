@@ -48,6 +48,7 @@ pub fn run() {
             commands::c_project::list_csc_folders,
             commands::call_tree::analyze_call_tree,
             commands::call_tree::export_call_tree_xlsx,
+            commands::crc::calculate_crc,
             commands::data_dictionary::analyze_data_dictionary,
             commands::data_dictionary::export_data_dictionary_xlsx
         ])

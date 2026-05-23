@@ -1,4 +1,5 @@
 import { Wrench } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -28,22 +29,27 @@ export function DashboardSidebar({
   const settingsTool = tools.find((tool) => tool.id === "settings");
 
   return (
-    <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="border-b">
+    <Sidebar
+      collapsible="offcanvas"
+      variant="inset"
+      className="border-sidebar-border/70"
+    >
+      <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              tooltip="OROSAITOOLS"
-              className="h-12 gap-3"
+              isActive={activeTool === "overview"}
+              onClick={() => onToolChange("overview")}
+              className="rounded-xl"
             >
-              <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                 <Wrench className="size-4" />
               </div>
 
-              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">OROSAITOOLS</span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-xs text-sidebar-foreground/70">
                   C tooling desktop app
                 </span>
               </div>
@@ -61,50 +67,42 @@ export function DashboardSidebar({
               {mainTools.map((tool) => (
                 <SidebarMenuItem key={tool.id}>
                   <SidebarMenuButton
-                    tooltip={tool.title}
                     isActive={activeTool === tool.id}
+                    tooltip={tool.title}
                     onClick={() => onToolChange(tool.id)}
-                    className="h-10 justify-start gap-3 px-3"
+                    className="h-9 rounded-xl"
                   >
-                    <tool.icon className="size-4 shrink-0" />
-                    <span className="truncate">{tool.title}</span>
+                    <tool.icon />
+                    <span>{tool.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {settingsTool && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Application</SidebarGroupLabel>
-
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip={settingsTool.title}
-                    isActive={activeTool === settingsTool.id}
-                    onClick={() => onToolChange(settingsTool.id)}
-                    className="h-10 justify-start gap-3 px-3"
-                  >
-                    <settingsTool.icon className="size-4 shrink-0" />
-                    <span className="truncate">{settingsTool.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t">
-        <div className="px-2 py-2">
-          <Badge variant="secondary" className="w-full justify-center">
+      {settingsTool && (
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={activeTool === settingsTool.id}
+                tooltip={settingsTool.title}
+                onClick={() => onToolChange(settingsTool.id)}
+                className="h-9 rounded-xl"
+              >
+                <settingsTool.icon />
+                <span>{settingsTool.title}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+
+          <Badge variant="secondary" className="mx-2 justify-center rounded-lg">
             Local Tauri app
           </Badge>
-        </div>
-      </SidebarFooter>
+        </SidebarFooter>
+      )}
 
       <SidebarRail />
     </Sidebar>

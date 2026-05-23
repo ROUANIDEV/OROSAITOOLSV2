@@ -17,25 +17,29 @@ export function DashboardTopbar({ activeTool }: DashboardTopbarProps) {
   const currentTool = tools.find((tool) => tool.id === activeTool) ?? tools[0];
 
   return (
-    <header className="sticky top-0 z-10 flex h-(--header-height) shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80">
-      <SidebarTrigger className="-ml-1" />
+    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur transition-[width,height] ease-linear">
+      <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
+        <SidebarTrigger className="-ml-1 rounded-lg" />
 
-      <Separator
-        orientation="vertical"
-        className="mr-1 data-[orientation=vertical]:h-4"
-      />
+        <Separator
+          orientation="vertical"
+          className="mx-2 data-[orientation=vertical]:h-4"
+        />
 
-      <Breadcrumb className="min-w-0 flex-1">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbPage className="truncate font-medium">
-              {currentTool.title}
-            </BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+        <Breadcrumb className="min-w-0">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage className="line-clamp-1 font-medium">
+                {currentTool.title}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
 
-      <ThemeToggle />
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
+        </div>
+      </div>
     </header>
   );
 }
