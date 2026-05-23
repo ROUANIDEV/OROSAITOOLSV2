@@ -1,0 +1,75 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "OROSAITOOLS",
+  "version": "0.1.0",
+  "identifier": "com.orosai.tools",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "OROSAITOOLS",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "visible": false,
+        "backgroundColor": "#09090b"
+      },
+      {
+        "label": "splashscreen",
+        "title": "OROSAITOOLS",
+        "url": "splashscreen.html",
+        "width": 420,
+        "height": 260,
+        "center": true,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "backgroundColor": "#09090b"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Oussama ROUANI",
+    "category": "DeveloperTool",
+    "shortDescription": "A futuristic desktop toolkit for code analysis and workspace productivity.",
+    "longDescription": "OROSAITOOLS is a futuristic desktop suite built for developers, featuring workspace scanning, C project analysis, call tree exploration, data dictionary tools, and professional export workflows.",
+    "copyright": "Copyright © 2026. Made By Oussama ROUANI.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "allowDowngrades": false,
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "icons/installer-header-futuristic.bmp",
+        "sidebarImage": "icons/installer-sidebar-futuristic.bmp",
+        "uninstallerHeaderImage": "icons/installer-header-futuristic.bmp",
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": ["English"],
+        "compression": "lzma"
+      }
+    }
+  }
+}
