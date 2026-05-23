@@ -4,6 +4,7 @@ import { CallTreeWorkspace } from "@/features/call-tree/CallTreeWorkspace";
 import type { CallTreeWorkspaceState } from "@/features/call-tree/call-tree-state";
 import { CProjectWorkspace } from "@/features/c-project/CProjectWorkspace";
 import type { CProjectWorkspaceState } from "@/features/c-project/c-project-state";
+import { CrcCalculatorWorkspace } from "@/features/crc/CrcCalculatorWorkspace";
 import { DataDictionaryWorkspace } from "@/features/data-dictionary/DataDictionaryWorkspace";
 import type { DataDictionaryWorkspaceState } from "@/features/data-dictionary/data-dictionary-state";
 import { DashboardOverview } from "@/features/dashboard/pages/DashboardOverview";
@@ -68,12 +69,16 @@ export function DashboardContent({
     );
   }
 
+  if (activeTool === "crc-calculator") {
+    return <CrcCalculatorWorkspace />;
+  }
+
   const tool = tools.find((item) => item.id === activeTool);
 
   return (
     <ToolPlaceholder
       title={tool?.title ?? "Tool"}
-      description={tool?.description ?? "Tool workspace"}
+      description={tool?.description ?? "This workspace is coming soon."}
     />
   );
 }

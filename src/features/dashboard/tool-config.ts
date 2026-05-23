@@ -3,10 +3,10 @@ import {
   BarChart3,
   BookOpen,
   Boxes,
+  Calculator,
   FileCode2,
   GitBranch,
   Home,
-  Network,
   Settings2,
   Table2,
 } from "lucide-react";
@@ -16,8 +16,7 @@ export type ToolId =
   | "c-project"
   | "call-tree"
   | "data-dictionary"
-  | "interfaces"
-  | "runnables"
+  | "crc-calculator"
   | "reports"
   | "settings";
 
@@ -54,16 +53,10 @@ export const tools: ToolConfig[] = [
     icon: BookOpen,
   },
   {
-    id: "interfaces",
-    title: "Interfaces",
-    description: "Extract and review project interfaces.",
-    icon: Network,
-  },
-  {
-    id: "runnables",
-    title: "Runnables",
-    description: "Analyze runnable entities.",
-    icon: Boxes,
+    id: "crc-calculator",
+    title: "CRC Calculator",
+    description: "Calculate CRC values for any protocol.",
+    icon: Calculator,
   },
   {
     id: "reports",
@@ -82,8 +75,8 @@ export const tools: ToolConfig[] = [
 export const dashboardStats = [
   {
     title: "Tool workspaces",
-    value: "7",
-    description: "Each tool has its own page.",
+    value: "6",
+    description: "Scanner, analyzers, CRC, reports, and settings.",
     icon: BarChart3,
   },
   {
@@ -99,3 +92,7 @@ export const dashboardStats = [
     icon: Table2,
   },
 ];
+
+export function isToolId(value: unknown): value is ToolId {
+  return typeof value === "string" && tools.some((tool) => tool.id === value);
+}
