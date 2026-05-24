@@ -6,15 +6,15 @@ import {
   getReportFilterOptions,
   getReportsCounts,
   getVisibleReports,
-} from "@/features/reports/reportsFilters";
+} from "@/features/reports/utils/reportsFilters";
 import type {
   ReportFilter,
   ReportsWorkspaceProps,
-} from "@/features/reports/reportsTypes";
-import { ReportsFiltersCard } from "@/features/reports/ReportsFiltersCard";
-import { ReportsList } from "@/features/reports/ReportsList";
-import { ReportsOverviewCard } from "@/features/reports/ReportsOverviewCard";
-import { useReportsActions } from "@/features/reports/useReportsActions";
+} from "@/features/reports/types/reportsTypes";
+import { ReportsFiltersCard } from "@/features/reports/components/filters/ReportsFiltersCard";
+import { ReportsList } from "@/features/reports/components/layout/ReportsList";
+import { ReportsOverviewCard } from "@/features/reports/components/cards/ReportsOverviewCard";
+import { useReportsActions } from "@/features/reports/hooks/useReportsActions";
 
 export function ReportsWorkspace({
   selectedCscPath,

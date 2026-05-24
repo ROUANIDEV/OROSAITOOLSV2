@@ -1,12 +1,12 @@
-import { CallTreeHeroCard } from "@/features/call-tree/CallTreeHeroCard";
-import { CallTreeResultsSection } from "@/features/call-tree/CallTreeResultsSection";
-import { CallTreeSummaryCard } from "@/features/call-tree/CallTreeSummaryCard";
+import { CallTreeHeroCard } from "@/features/call-tree/components/CallTreeHeroCard";
+import { CallTreeResultsSection } from "@/features/call-tree/components/CallTreeResultsSection";
+import { CallTreeSummaryCard } from "@/features/call-tree/components/CallTreeSummaryCard";
 import {
   getCallTreeCalls,
   getCallTreeFunctions,
-} from "@/features/call-tree/callTreeSelectors";
-import type { CallTreeWorkspaceProps } from "@/features/call-tree/callTreeWorkspaceTypes";
-import { useCallTreeActions } from "@/features/call-tree/useCallTreeActions";
+} from "@/features/call-tree/selectors/callTreeSelectors";
+import type { CallTreeWorkspaceProps } from "@/features/call-tree/types/callTreeWorkspaceTypes";
+import { useCallTreeActions } from "@/features/call-tree/hooks/useCallTreeActions";
 
 export function CallTreeWorkspace({
   selectedCscPath,
