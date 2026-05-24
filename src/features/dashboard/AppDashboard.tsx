@@ -1,26 +1,11 @@
-import type { CSSProperties, Dispatch, SetStateAction } from "react";
+import type { CSSProperties } from "react";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import type { CallTreeWorkspaceState } from "@/features/call-tree/call-tree-state";
-import type { CProjectWorkspaceState } from "@/features/c-project/c-project-state";
-import type { DataDictionaryWorkspaceState } from "@/features/data-dictionary/data-dictionary-state";
+
 import { DashboardContent } from "@/features/dashboard/DashboardContent";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { DashboardTopbar } from "@/features/dashboard/DashboardTopbar";
-import type { ToolId } from "@/features/dashboard/tool-config";
-
-type AppDashboardProps = {
-  activeTool: ToolId;
-  onToolChange: (tool: ToolId) => void;
-  cProjectState: CProjectWorkspaceState;
-  onCProjectStateChange: Dispatch<SetStateAction<CProjectWorkspaceState>>;
-  callTreeState: CallTreeWorkspaceState;
-  onCallTreeStateChange: Dispatch<SetStateAction<CallTreeWorkspaceState>>;
-  dataDictionaryState: DataDictionaryWorkspaceState;
-  onDataDictionaryStateChange: Dispatch<
-    SetStateAction<DataDictionaryWorkspaceState>
-  >;
-};
+import type { AppDashboardProps } from "@/features/dashboard/dashboardTypes";
 
 export function AppDashboard({
   activeTool,

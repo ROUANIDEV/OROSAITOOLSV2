@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { sendFrontendReadySignal } from "@/api/app/lifecycleApi";
 
 let didNotifyFrontendReady = false;
 
@@ -36,8 +36,7 @@ export async function notifyFrontendReady(): Promise<void> {
     await sleep(0);
     await waitForFonts();
     await waitForPaint();
-
-    await invoke("frontend_ready");
+    await sendFrontendReadySignal();
   } catch (error) {
     console.error("Failed to notify Tauri that frontend is ready:", error);
   }
