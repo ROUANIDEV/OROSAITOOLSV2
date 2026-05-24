@@ -1,0 +1,62 @@
+pub const IGNORED_DIRS: &[&str] = &[
+    ".git",
+    ".svn",
+    ".hg",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".vscode",
+    ".idea",
+];
+
+pub const SOURCE_EXTENSIONS: &[&str] = [
+    "c",
+    "cpp",
+    "cc",
+    "cxx",
+].as_slice();
+
+pub const HEADER_EXTENSIONS: &[&str] = [
+    "h",
+    "hpp",
+    "hh",
+    "hxx",
+].as_slice();
+
+pub const C_KEYWORDS: &[&str] = &[
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+];

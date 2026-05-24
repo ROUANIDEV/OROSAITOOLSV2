@@ -5,3 +5,4 @@ pub mod crc;
 pub mod data_dictionary;
 pub mod reports;
 pub mod storage;
+pub mod window;
