@@ -12,7 +12,8 @@ export type CProjectWorkspaceState = {
   lastScannedAt: string | null;
 };
 
-const STORAGE_KEY = "orosaitools.cProjectWorkspaceState.v1";
+export const C_PROJECT_WORKSPACE_STORAGE_KEY =
+  "orosaitools.cProjectWorkspaceState.v1";
 
 export const emptyCProjectWorkspaceState: CProjectWorkspaceState = {
   projectPath: "",
@@ -24,51 +25,38 @@ export const emptyCProjectWorkspaceState: CProjectWorkspaceState = {
   lastScannedAt: null,
 };
 
-export function loadCProjectWorkspaceState(): CProjectWorkspaceState {
-  if (typeof window === "undefined") {
-    return emptyCProjectWorkspaceState;
-  }
+export function normalizeCProjectWorkspaceState(
+  state: Partial<CProjectWorkspaceState> | null | undefined,
+): CProjectWorkspaceState {
+  const nextState: CProjectWorkspaceState = {
+    ...emptyCProjectWorkspaceState,
+    ...(state ?? {}),
+  };
 
-  try {
-    const rawValue = window.localStorage.getItem(STORAGE_KEY);
+  const hasScanResult = Boolean(nextState.summary);
 
-    if (!rawValue) {
-      return emptyCProjectWorkspaceState;
-    }
-
-    const parsedValue = JSON.parse(rawValue) as Partial<CProjectWorkspaceState>;
-
-    const hasScanResult = Boolean(parsedValue.summary);
-
-    return {
-      ...emptyCProjectWorkspaceState,
-      ...parsedValue,
-      status: hasScanResult ? "ready" : "idle",
-      error: null,
-    };
-  } catch {
-    return emptyCProjectWorkspaceState;
-  }
+  return {
+    ...nextState,
+    status: hasScanResult ? "ready" : "idle",
+    error: null,
+  };
 }
 
-export function saveCProjectWorkspaceState(
+export function prepareCProjectWorkspaceStateForStorage(
   state: CProjectWorkspaceState,
-): void {
-  if (typeof window === "undefined") {
-    return;
-  }
+): CProjectWorkspaceState {
+  const hasScanResult = Boolean(state.summary);
 
-  try {
-    const stateToSave: CProjectWorkspaceState = {
-      ...state,
-      status: state.status === "scanning" ? "idle" : state.status,
-      error: null,
-    };
-
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
-  } catch {
-    // Ignore localStorage errors.
-  }
+  return {
+    ...state,
+    status:
+      state.status === "scanning" || state.status === "error"
+        ? hasScanResult
+          ? "ready"
+          : "idle"
+        : state.status,
+    error: null,
+  };
 }
 
 export function resetCProjectScanForNewFolder(
