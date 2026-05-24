@@ -1,22 +1,40 @@
 use regex::Regex;
 
+pub struct DataTypeRegexes {
+    pub typedef_block: Regex,
+    pub enum_no_typedef: Regex,
+    pub function_pointer_typedef: Regex,
+    pub typedef_alias: Regex,
+}
+
 pub fn build_define_regex() -> Result<Regex, String> {
-    Regex::new(
+    build_regex(
         r"^\s*#\s*define\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\s+(?P<value>.*))?$",
+        "#define",
     )
-    .map_err(|error| format!("Failed to build #define regex: {error}"))
 }
 
-pub fn build_typedef_regex() -> Result<Regex, String> {
-    Regex::new(
-        r"^\s*typedef\s+.*?\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;",
-    )
-    .map_err(|error| format!("Failed to build typedef regex: {error}"))
+pub fn build_data_type_regexes() -> Result<DataTypeRegexes, String> {
+    Ok(DataTypeRegexes {
+        typedef_block: build_regex(
+            r"(?s)^\s*typedef\s+(struct|enum|union)\b(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*\{.*\}\s*([A-Za-z_][A-Za-z0-9_]*)\s*((?:\s*\[[^\]]*\])*)\s*;\s*$",
+            "typedef struct/enum/union",
+        )?,
+        enum_no_typedef: build_regex(
+            r"(?s)^\s*enum\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{.*\}\s*;\s*$",
+            "enum without typedef",
+        )?,
+        function_pointer_typedef: build_regex(
+            r"(?s)^\s*typedef\s+.+?\(\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*\(.*\)\s*;\s*$",
+            "function pointer typedef",
+        )?,
+        typedef_alias: build_regex(
+            r"(?s)^\s*typedef\s+(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*((?:\s*\[[^\]]*\])*)\s*;\s*$",
+            "typedef alias",
+        )?,
+    })
 }
 
-pub fn build_global_regex() -> Result<Regex, String> {
-    Regex::new(
-        r"^\s*(?P<type>[A-Za-z_][A-Za-z0-9_\s\*]*?)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<dims>(?:\s*\[[^\]]*\])*)\s*(?:=\s*(?P<init>[^;]*))?;",
-    )
-    .map_err(|error| format!("Failed to build global variable regex: {error}"))
+fn build_regex(pattern: &str, label: &str) -> Result<Regex, String> {
+    Regex::new(pattern).map_err(|error| format!("Failed to build {label} regex: {error}"))
 }
