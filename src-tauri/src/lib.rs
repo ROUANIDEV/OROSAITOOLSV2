@@ -50,7 +50,8 @@ pub fn run() {
             commands::call_tree::export_call_tree_xlsx,
             commands::crc::calculate_crc,
             commands::data_dictionary::analyze_data_dictionary,
-            commands::data_dictionary::export_data_dictionary_xlsx
+            commands::data_dictionary::export_data_dictionary_xlsx,
+            commands::reports::reveal_path_in_file_manager
         ])
         .run(tauri::generate_context!())
         .expect("error while running OROSAITOOLS application");
