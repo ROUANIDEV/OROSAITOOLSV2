@@ -51,23 +51,21 @@ type CrcStatus = "idle" | "calculating" | "success" | "error";
 export function CrcCalculatorWorkspace() {
   const taskIdRef = useRef<string | null>(null);
 
+  const [crcStorageLoaded, setCrcStorageLoaded] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState(defaultCrcPreset.id);
   const [inputFormat, setInputFormat] = useState<CrcInputFormat>("text");
   const [payload, setPayload] = useState(crcExampleInputs.text);
+
   const [draft, setDraft] = useState<CrcDraft>(() =>
     presetToDraft(defaultCrcPreset),
   );
+
   const [status, setStatus] = useState<CrcStatus>("idle");
   const [result, setResult] = useState<CrcCalculationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [history, setHistory] = useState<CrcHistoryEntry[]>(() =>
-    loadCrcHistory(),
-  );
-
-  const [profiles, setProfiles] = useState<SavedCrcProfile[]>(() =>
-    loadSavedCrcProfiles(),
-  );
+  const [history, setHistory] = useState<CrcHistoryEntry[]>([]);
+  const [profiles, setProfiles] = useState<SavedCrcProfile[]>([]);
 
   const selectedPreset = useMemo(
     () => crcPresets.find((preset) => preset.id === selectedPresetId) ?? null,
@@ -75,14 +73,49 @@ export function CrcCalculatorWorkspace() {
   );
 
   const isCalculating = status === "calculating";
+  const isStorageLoading = !crcStorageLoaded;
+  const isBusy = isCalculating || isStorageLoading;
 
   useEffect(() => {
-    saveCrcHistory(history);
-  }, [history]);
+    let isMounted = true;
+
+    async function loadStoredCrcData() {
+      const [loadedHistory, loadedProfiles] = await Promise.all([
+        loadCrcHistory(),
+        loadSavedCrcProfiles(),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      setHistory(loadedHistory);
+      setProfiles(loadedProfiles);
+      setCrcStorageLoaded(true);
+    }
+
+    void loadStoredCrcData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
-    saveSavedCrcProfiles(profiles);
-  }, [profiles]);
+    if (!crcStorageLoaded) {
+      return;
+    }
+
+    void saveCrcHistory(history);
+  }, [crcStorageLoaded, history]);
+
+  useEffect(() => {
+    if (!crcStorageLoaded) {
+      return;
+    }
+
+    void saveSavedCrcProfiles(profiles);
+  }, [crcStorageLoaded, profiles]);
 
   function clearResult() {
     setStatus("idle");
@@ -133,9 +166,13 @@ export function CrcCalculatorWorkspace() {
   }
 
   async function handleCalculate() {
-    const taskId = createTaskId();
-    taskIdRef.current = taskId;
+    if (isStorageLoading) {
+      return;
+    }
 
+    const taskId = createTaskId();
+
+    taskIdRef.current = taskId;
     setStatus("calculating");
     setError(null);
 
@@ -185,7 +222,7 @@ export function CrcCalculatorWorkspace() {
   }
 
   function handleClearHistory() {
-    clearCrcHistory();
+    void clearCrcHistory();
     setHistory([]);
   }
 
@@ -210,7 +247,7 @@ export function CrcCalculatorWorkspace() {
   }
 
   function handleClearProfiles() {
-    clearSavedCrcProfiles();
+    void clearSavedCrcProfiles();
     setProfiles([]);
   }
 
@@ -226,6 +263,7 @@ export function CrcCalculatorWorkspace() {
             <h1 className="text-2xl font-semibold tracking-tight">
               CRC Calculator
             </h1>
+
             <p className="max-w-3xl text-sm text-muted-foreground">
               Calculate CRC values for any protocol using custom width,
               polynomial, initial value, xorout, and reflection settings.
@@ -233,24 +271,24 @@ export function CrcCalculatorWorkspace() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={handleCalculate}
-              disabled={isCalculating}
-            >
-              {isCalculating ? (
+            <Button type="button" onClick={handleCalculate} disabled={isBusy}>
+              {isCalculating || isStorageLoading ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <PlayCircle className="size-4" />
               )}
-              {isCalculating ? "Calculating..." : "Calculate CRC"}
+              {isStorageLoading
+                ? "Loading..."
+                : isCalculating
+                  ? "Calculating..."
+                  : "Calculate CRC"}
             </Button>
 
             <Button
               type="button"
               variant="outline"
               onClick={handleLoadCheckInput}
-              disabled={isCalculating}
+              disabled={isBusy}
             >
               <ShieldCheck className="size-4" />
               Load 123456789
@@ -260,7 +298,7 @@ export function CrcCalculatorWorkspace() {
               type="button"
               variant="secondary"
               onClick={handleReset}
-              disabled={isCalculating}
+              disabled={isBusy}
             >
               <RotateCcw className="size-4" />
               Reset
@@ -274,7 +312,7 @@ export function CrcCalculatorWorkspace() {
         <AlertTitle>Rust CRC engine active</AlertTitle>
         <AlertDescription>
           Each calculation is sent to a Tauri Rust command. History and custom
-          profiles are memorized locally on this device.
+          profiles are saved in the app data folder on this device.
         </AlertDescription>
       </Alert>
 
@@ -282,7 +320,7 @@ export function CrcCalculatorWorkspace() {
         selectedPresetId={selectedPresetId}
         inputFormat={inputFormat}
         payload={payload}
-        disabled={isCalculating}
+        disabled={isBusy}
         onPresetChange={handlePresetChange}
         onInputFormatChange={handleInputFormatChange}
         onPayloadChange={handlePayloadChange}
@@ -291,7 +329,7 @@ export function CrcCalculatorWorkspace() {
       <CrcParametersCard
         draft={draft}
         selectedPreset={selectedPreset}
-        disabled={isCalculating}
+        disabled={isBusy}
         onDraftChange={handleDraftChange}
         onCustomMode={() => setSelectedPresetId("custom")}
       />
@@ -308,7 +346,7 @@ export function CrcCalculatorWorkspace() {
       <CrcProfilesCard
         draft={draft}
         profiles={profiles}
-        disabled={isCalculating}
+        disabled={isBusy}
         onSave={handleSaveProfile}
         onLoad={handleLoadProfile}
         onDelete={handleDeleteProfile}

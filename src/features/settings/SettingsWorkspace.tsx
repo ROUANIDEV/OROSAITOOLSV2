@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   Database,
   FileSpreadsheet,
+  FolderOpen,
   Laptop,
   Moon,
   RotateCcw,
@@ -33,11 +34,14 @@ import {
   type AppSettings,
 } from "@/features/settings/settings-state";
 import { useTheme } from "@/features/theme/theme-provider";
+import { getAppDataPath, openAppDataFolder } from "@/lib/appDataStorage";
 
 type SettingsWorkspaceProps = {
   selectedCscPath: string | null;
   onToolChange: (tool: ToolId) => void;
 };
+
+type RefreshPathStatus = "idle" | "refreshing" | "unchanged";
 
 const themeOptions = [
   {
@@ -60,6 +64,14 @@ const themeOptions = [
   },
 ] as const;
 
+const nativeJsonStorageFiles = [
+  "orosaitools.cProjectWorkspaceState.v1.json",
+  "orosaitools.callTreeWorkspace.v1.json",
+  "orosaitools.dataDictionaryWorkspace.v1.json",
+  "orosaitools.crc.history.v1.json",
+  "orosaitools.crc.profiles.v1.json",
+] as const;
+
 export function SettingsWorkspace({
   selectedCscPath,
   onToolChange,
@@ -74,10 +86,48 @@ export function SettingsWorkspace({
   const [isResetConfirming, setIsResetConfirming] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
 
+  const [appDataPath, setAppDataPath] = useState<string | null>(null);
+  const [appDataPathError, setAppDataPathError] = useState<string | null>(null);
+  const [isOpeningDataFolder, setIsOpeningDataFolder] = useState(false);
+  const [refreshPathStatus, setRefreshPathStatus] =
+    useState<RefreshPathStatus>("idle");
+
+  const refreshStatusTimeoutRef = useRef<number | null>(null);
+
   useEffect(() => {
     saveAppSettings(settings);
     setSavedAt(new Date().toISOString());
   }, [settings]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadNativeJsonStoragePath() {
+      try {
+        const path = await getAppDataPath();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setAppDataPath(path);
+        setAppDataPathError(null);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setAppDataPath(null);
+        setAppDataPathError(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    void loadNativeJsonStoragePath();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isResetConfirming) {
@@ -107,6 +157,12 @@ export function SettingsWorkspace({
     };
   }, [resetMessage]);
 
+  useEffect(() => {
+    return () => {
+      clearRefreshStatusTimeout();
+    };
+  }, []);
+
   function updateSetting<Key extends keyof AppSettings>(
     key: Key,
     value: AppSettings[Key],
@@ -117,6 +173,58 @@ export function SettingsWorkspace({
     }));
 
     setResetMessage(null);
+  }
+
+  async function handleOpenAppDataFolder() {
+    setIsOpeningDataFolder(true);
+    setAppDataPathError(null);
+
+    try {
+      await openAppDataFolder();
+    } catch (error) {
+      setAppDataPathError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsOpeningDataFolder(false);
+    }
+  }
+
+  async function handleRefreshAppDataPath() {
+    clearRefreshStatusTimeout();
+
+    setRefreshPathStatus("refreshing");
+    setAppDataPathError(null);
+
+    try {
+      const refreshedPath = await getAppDataPath();
+      const pathDidNotChange = refreshedPath === appDataPath;
+
+      setAppDataPath(refreshedPath);
+
+      if (pathDidNotChange) {
+        setRefreshPathStatus("unchanged");
+
+        refreshStatusTimeoutRef.current = window.setTimeout(() => {
+          setRefreshPathStatus("idle");
+          refreshStatusTimeoutRef.current = null;
+        }, 5000);
+
+        return;
+      }
+
+      setRefreshPathStatus("idle");
+    } catch (error) {
+      setRefreshPathStatus("idle");
+      setAppDataPathError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function clearRefreshStatusTimeout() {
+    if (refreshStatusTimeoutRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(refreshStatusTimeoutRef.current);
+    refreshStatusTimeoutRef.current = null;
   }
 
   function handleResetSettings() {
@@ -133,6 +241,18 @@ export function SettingsWorkspace({
     setTheme("system");
     setIsResetConfirming(false);
     setResetMessage("Settings and workspace data were reset.");
+  }
+
+  function getRefreshButtonText(): string {
+    if (refreshPathStatus === "refreshing") {
+      return "Refreshing...";
+    }
+
+    if (refreshPathStatus === "unchanged") {
+      return "Nothing to refresh";
+    }
+
+    return "Refresh folder path";
   }
 
   const preferenceItems = [
@@ -296,6 +416,94 @@ export function SettingsWorkspace({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FolderOpen className="h-5 w-5" />
+            JSON saved files folder
+          </CardTitle>
+
+          <CardDescription>
+            Workspace data is saved as native JSON files in the app data folder.
+            UI preferences like theme and settings stay in localStorage.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="grid gap-4">
+          {appDataPathError ? (
+            <Alert>
+              <TriangleAlert className="h-4 w-4" />
+              <AlertTitle>Could not load JSON storage folder</AlertTitle>
+              <AlertDescription>{appDataPathError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="rounded-lg border p-4">
+            <p className="text-sm font-medium text-muted-foreground">
+              Native JSON storage folder
+            </p>
+            <p className="mt-2 break-all font-mono text-sm">
+              {appDataPath ?? "Loading native app data path..."}
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border p-4">
+              <p className="text-sm font-medium text-muted-foreground">
+                Saved JSON files
+              </p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {nativeJsonStorageFiles.map((fileName) => (
+                  <Badge key={fileName} variant="outline" className="font-mono">
+                    {fileName}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <p className="text-sm font-medium text-muted-foreground">
+                Storage type
+              </p>
+              <p className="mt-2 text-sm">
+                Native desktop app-data JSON storage
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="outline"
+              onClick={handleOpenAppDataFolder}
+              disabled={!appDataPath || isOpeningDataFolder}
+            >
+              {isOpeningDataFolder ? (
+                <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FolderOpen className="mr-2 h-4 w-4" />
+              )}
+              {isOpeningDataFolder ? "Opening folder..." : "Open JSON folder"}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                void handleRefreshAppDataPath();
+              }}
+              disabled={refreshPathStatus === "refreshing"}
+            >
+              <RotateCcw
+                className={`mr-2 h-4 w-4 ${
+                  refreshPathStatus === "refreshing" ? "animate-spin" : ""
+                }`}
+              />
+              {getRefreshButtonText()}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

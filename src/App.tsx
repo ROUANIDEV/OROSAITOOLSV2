@@ -1,32 +1,38 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  CALL_TREE_WORKSPACE_STORAGE_KEY,
   emptyCallTreeWorkspaceState,
   normalizeCallTreeWorkspaceState,
+  prepareCallTreeWorkspaceStateForStorage,
   type CallTreeWorkspaceState,
 } from "@/features/call-tree/call-tree-state";
 import {
+  C_PROJECT_WORKSPACE_STORAGE_KEY,
   emptyCProjectWorkspaceState,
-  loadCProjectWorkspaceState,
-  saveCProjectWorkspaceState,
+  normalizeCProjectWorkspaceState,
+  prepareCProjectWorkspaceStateForStorage,
   type CProjectWorkspaceState,
 } from "@/features/c-project/c-project-state";
 import { AppDashboard } from "@/features/dashboard/AppDashboard";
 import { isToolId, tools, type ToolId } from "@/features/dashboard/tool-config";
 import {
+  DATA_DICTIONARY_WORKSPACE_STORAGE_KEY,
   emptyDataDictionaryWorkspaceState,
   normalizeDataDictionaryWorkspaceState,
+  prepareDataDictionaryWorkspaceStateForStorage,
   type DataDictionaryWorkspaceState,
 } from "@/features/data-dictionary/data-dictionary-state";
 import {
   loadAppSettings,
   WORKSPACE_DATA_CLEARED_EVENT,
 } from "@/features/settings/settings-state";
-import { loadPersistedState, savePersistedState } from "@/lib/persistedState";
+import {
+  loadNativePersistedState,
+  useDebouncedNativePersistedStateSave,
+} from "@/lib/nativePersistedState";
 
 const ACTIVE_TOOL_STORAGE_KEY = "orosaitools.activeTool.v1";
-const CALL_TREE_STORAGE_KEY = "orosaitools.callTreeWorkspace.v1";
-const DATA_DICTIONARY_STORAGE_KEY = "orosaitools.dataDictionaryWorkspace.v1";
 
 function loadActiveTool(): ToolId {
   if (typeof window === "undefined") {
@@ -72,7 +78,7 @@ function saveActiveTool(activeTool: ToolId): void {
       JSON.stringify(activeTool),
     );
   } catch {
-    // Ignore local storage errors.
+    // Ignore localStorage errors.
   }
 }
 
@@ -83,31 +89,72 @@ function getToolTitle(toolId: ToolId): string {
 export default function App() {
   const [activeTool, setActiveTool] = useState<ToolId>(() => loadActiveTool());
 
-  const [cProjectState, setCProjectState] =
-    useState<CProjectWorkspaceState>(() => loadCProjectWorkspaceState());
+  const [workspaceStateLoaded, setWorkspaceStateLoaded] = useState(false);
+
+  const [cProjectState, setCProjectState] = useState<CProjectWorkspaceState>(
+    emptyCProjectWorkspaceState,
+  );
 
   const [callTreeState, setCallTreeState] = useState<CallTreeWorkspaceState>(
-    () =>
-      normalizeCallTreeWorkspaceState(
-        loadPersistedState(CALL_TREE_STORAGE_KEY, emptyCallTreeWorkspaceState),
-      ),
+    emptyCallTreeWorkspaceState,
   );
 
   const [dataDictionaryState, setDataDictionaryState] =
-    useState<DataDictionaryWorkspaceState>(() =>
-      normalizeDataDictionaryWorkspaceState(
-        loadPersistedState(
-          DATA_DICTIONARY_STORAGE_KEY,
-          emptyDataDictionaryWorkspaceState,
-        ),
-      ),
-    );
+    useState<DataDictionaryWorkspaceState>(emptyDataDictionaryWorkspaceState);
 
   const lastCallTreeExportRef = useRef(callTreeState.lastExportedAt);
 
   const lastDataDictionaryExportRef = useRef(
     dataDictionaryState.lastExportedAt,
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorkspaceState() {
+      const [
+        loadedCProjectState,
+        loadedCallTreeState,
+        loadedDataDictionaryState,
+      ] = await Promise.all([
+        loadNativePersistedState({
+          key: C_PROJECT_WORKSPACE_STORAGE_KEY,
+          fallback: emptyCProjectWorkspaceState,
+          normalize: normalizeCProjectWorkspaceState,
+        }),
+        loadNativePersistedState({
+          key: CALL_TREE_WORKSPACE_STORAGE_KEY,
+          fallback: emptyCallTreeWorkspaceState,
+          normalize: normalizeCallTreeWorkspaceState,
+        }),
+        loadNativePersistedState({
+          key: DATA_DICTIONARY_WORKSPACE_STORAGE_KEY,
+          fallback: emptyDataDictionaryWorkspaceState,
+          normalize: normalizeDataDictionaryWorkspaceState,
+        }),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      setCProjectState(loadedCProjectState);
+      setCallTreeState(loadedCallTreeState);
+      setDataDictionaryState(loadedDataDictionaryState);
+
+      lastCallTreeExportRef.current = loadedCallTreeState.lastExportedAt;
+      lastDataDictionaryExportRef.current =
+        loadedDataDictionaryState.lastExportedAt;
+
+      setWorkspaceStateLoaded(true);
+    }
+
+    void loadWorkspaceState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleWorkspaceDataCleared() {
@@ -118,6 +165,7 @@ export default function App() {
       setCProjectState(emptyCProjectWorkspaceState);
       setCallTreeState(emptyCallTreeWorkspaceState);
       setDataDictionaryState(emptyDataDictionaryWorkspaceState);
+      setWorkspaceStateLoaded(true);
     }
 
     window.addEventListener(
@@ -141,23 +189,26 @@ export default function App() {
     saveActiveTool(activeTool);
   }, [activeTool]);
 
-  useEffect(() => {
-    saveCProjectWorkspaceState(cProjectState);
-  }, [cProjectState]);
+  useDebouncedNativePersistedStateSave({
+    key: C_PROJECT_WORKSPACE_STORAGE_KEY,
+    value: cProjectState,
+    enabled: workspaceStateLoaded,
+    prepare: prepareCProjectWorkspaceStateForStorage,
+  });
 
-  useEffect(() => {
-    savePersistedState(
-      CALL_TREE_STORAGE_KEY,
-      normalizeCallTreeWorkspaceState(callTreeState),
-    );
-  }, [callTreeState]);
+  useDebouncedNativePersistedStateSave({
+    key: CALL_TREE_WORKSPACE_STORAGE_KEY,
+    value: callTreeState,
+    enabled: workspaceStateLoaded,
+    prepare: prepareCallTreeWorkspaceStateForStorage,
+  });
 
-  useEffect(() => {
-    savePersistedState(
-      DATA_DICTIONARY_STORAGE_KEY,
-      normalizeDataDictionaryWorkspaceState(dataDictionaryState),
-    );
-  }, [dataDictionaryState]);
+  useDebouncedNativePersistedStateSave({
+    key: DATA_DICTIONARY_WORKSPACE_STORAGE_KEY,
+    value: dataDictionaryState,
+    enabled: workspaceStateLoaded,
+    prepare: prepareDataDictionaryWorkspaceStateForStorage,
+  });
 
   useEffect(() => {
     const previousCallTreeExport = lastCallTreeExportRef.current;

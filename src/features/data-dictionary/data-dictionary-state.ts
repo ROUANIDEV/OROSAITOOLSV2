@@ -19,6 +19,9 @@ export type DataDictionaryWorkspaceState = {
   lastExportedAt: string | null;
 };
 
+export const DATA_DICTIONARY_WORKSPACE_STORAGE_KEY =
+  "orosaitools.dataDictionaryWorkspace.v1";
+
 export const emptyDataDictionaryWorkspaceState: DataDictionaryWorkspaceState = {
   status: "idle",
   analysis: null,
@@ -29,16 +32,45 @@ export const emptyDataDictionaryWorkspaceState: DataDictionaryWorkspaceState = {
 };
 
 export function normalizeDataDictionaryWorkspaceState(
+  state: Partial<DataDictionaryWorkspaceState> | null | undefined,
+): DataDictionaryWorkspaceState {
+  const nextState: DataDictionaryWorkspaceState = {
+    ...emptyDataDictionaryWorkspaceState,
+    ...(state ?? {}),
+  };
+
+  return {
+    ...nextState,
+    status: normalizeDataDictionaryStatus(nextState),
+    error: null,
+  };
+}
+
+export function prepareDataDictionaryWorkspaceStateForStorage(
   state: DataDictionaryWorkspaceState,
 ): DataDictionaryWorkspaceState {
+  const normalizedState = normalizeDataDictionaryWorkspaceState(state);
+
   return {
-    ...emptyDataDictionaryWorkspaceState,
-    ...state,
-    status:
-      state.status === "analyzing" || state.status === "exporting"
-        ? state.analysis
-          ? "ready"
-          : "idle"
-        : state.status,
+    ...normalizedState,
+    error: null,
   };
+}
+
+function normalizeDataDictionaryStatus(
+  state: DataDictionaryWorkspaceState,
+): DataDictionaryStatus {
+  if (
+    state.status === "analyzing" ||
+    state.status === "exporting" ||
+    state.status === "error"
+  ) {
+    return state.analysis ? "ready" : "idle";
+  }
+
+  if (state.status === "ready" && !state.analysis) {
+    return "idle";
+  }
+
+  return state.status;
 }

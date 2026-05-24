@@ -1,4 +1,5 @@
 import type { CrcDraft } from "@/features/crc/crc-config";
+import { deleteAppData, readAppData, writeAppData } from "@/lib/appDataStorage";
 
 export type SavedCrcProfile = {
   id: string;
@@ -9,47 +10,29 @@ export type SavedCrcProfile = {
   draft: CrcDraft;
 };
 
-const CRC_PROFILES_STORAGE_KEY = "orosaitools.crc.profiles.v1";
+export const CRC_PROFILES_STORAGE_KEY = "orosaitools.crc.profiles.v1";
+
 const MAX_SAVED_PROFILES = 50;
 
-export function loadSavedCrcProfiles(): SavedCrcProfile[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
+export async function loadSavedCrcProfiles(): Promise<SavedCrcProfile[]> {
   try {
-    const rawValue = window.localStorage.getItem(CRC_PROFILES_STORAGE_KEY);
-
-    if (!rawValue) {
-      return [];
-    }
-
-    const parsedValue = JSON.parse(rawValue) as unknown;
-
-    if (!Array.isArray(parsedValue)) {
-      return [];
-    }
-
-    return parsedValue
-      .filter(isSavedCrcProfile)
-      .slice(0, MAX_SAVED_PROFILES);
-  } catch {
+    const value = await readAppData<unknown>(CRC_PROFILES_STORAGE_KEY);
+    return normalizeSavedCrcProfiles(value);
+  } catch (error) {
+    console.error("Failed to read native CRC profiles.", error);
     return [];
   }
 }
 
-export function saveSavedCrcProfiles(profiles: SavedCrcProfile[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
+export async function saveSavedCrcProfiles(
+  profiles: SavedCrcProfile[],
+): Promise<void> {
+  const normalizedProfiles = normalizeSavedCrcProfiles(profiles);
 
   try {
-    window.localStorage.setItem(
-      CRC_PROFILES_STORAGE_KEY,
-      JSON.stringify(profiles.slice(0, MAX_SAVED_PROFILES)),
-    );
-  } catch {
-    // Ignore storage errors.
+    await writeAppData(CRC_PROFILES_STORAGE_KEY, normalizedProfiles);
+  } catch (error) {
+    console.error("Failed to save CRC profiles in native app data.", error);
   }
 }
 
@@ -93,15 +76,11 @@ export function deleteSavedCrcProfile(
   return profiles.filter((profile) => profile.id !== profileId);
 }
 
-export function clearSavedCrcProfiles(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
+export async function clearSavedCrcProfiles(): Promise<void> {
   try {
-    window.localStorage.removeItem(CRC_PROFILES_STORAGE_KEY);
-  } catch {
-    // Ignore storage errors.
+    await deleteAppData(CRC_PROFILES_STORAGE_KEY);
+  } catch (error) {
+    console.error("Failed to clear native CRC profiles.", error);
   }
 }
 
@@ -113,6 +92,14 @@ export function formatSavedCrcProfileDate(value: string): string {
   }
 
   return date.toLocaleString();
+}
+
+function normalizeSavedCrcProfiles(value: unknown): SavedCrcProfile[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isSavedCrcProfile).slice(0, MAX_SAVED_PROFILES);
 }
 
 function createProfileId(): string {
