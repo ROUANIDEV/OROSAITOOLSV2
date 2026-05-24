@@ -10,6 +10,8 @@ import type { DataDictionaryWorkspaceState } from "@/features/data-dictionary/da
 import { DashboardOverview } from "@/features/dashboard/pages/DashboardOverview";
 import { ToolPlaceholder } from "@/features/dashboard/pages/ToolPlaceholder";
 import { tools, type ToolId } from "@/features/dashboard/tool-config";
+import { ReportsWorkspace } from "@/features/reports/ReportsWorkspace";
+import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
 
 type DashboardContentProps = {
   activeTool: ToolId;
@@ -69,6 +71,26 @@ export function DashboardContent({
     );
   }
 
+  if (activeTool === "reports") {
+    return (
+      <ReportsWorkspace
+        selectedCscPath={cProjectState.selectedCscPath}
+        callTreeState={callTreeState}
+        dataDictionaryState={dataDictionaryState}
+        onToolChange={onToolChange}
+      />
+    );
+  }
+
+  if (activeTool === "settings") {
+    return (
+      <SettingsWorkspace
+        selectedCscPath={cProjectState.selectedCscPath}
+        onToolChange={onToolChange}
+      />
+    );
+  }
+
   if (activeTool === "crc-calculator") {
     return <CrcCalculatorWorkspace />;
   }
@@ -77,8 +99,11 @@ export function DashboardContent({
 
   return (
     <ToolPlaceholder
-      title={tool?.title ?? "Tool"}
-      description={tool?.description ?? "This workspace is coming soon."}
+      title={tool?.title ?? "Workspace"}
+      description={
+        tool?.description ??
+        "This workspace is ready and will be implemented in a later step."
+      }
     />
   );
 }
