@@ -16,3 +16,9 @@ impl AppInfo {
         }
     }
 }
+
+impl Default for AppInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
