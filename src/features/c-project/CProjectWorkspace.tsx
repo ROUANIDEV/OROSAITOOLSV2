@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 
-import { CProjectScannerCard } from "@/features/c-project/CProjectScannerCard";
-import { CProjectSelectedCscCard } from "@/features/c-project/CProjectSelectedCscCard";
-import type { CProjectWorkspaceProps } from "@/features/c-project/cProjectWorkspaceTypes";
-import { findSelectedCsc } from "@/features/c-project/cProjectWorkspaceUtils";
-import { useCProjectScannerActions } from "@/features/c-project/useCProjectScannerActions";
+import { CProjectScannerCard } from "@/features/c-project/components/scanner/CProjectScannerCard";
+import { CProjectSelectedCscCard } from "@/features/c-project/components/csc/CProjectSelectedCscCard";
+import type { CProjectWorkspaceProps } from "@/features/c-project/types/cProjectWorkspaceTypes";
+import { findSelectedCsc } from "@/features/c-project/utils/cProjectWorkspaceUtils";
+import { useCProjectScannerActions } from "@/features/c-project/hooks/useCProjectScannerActions";
 
 export function CProjectWorkspace({
   state,

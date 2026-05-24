@@ -1,8 +1,8 @@
-import { DataDictionaryHeroCard } from "@/features/data-dictionary/DataDictionaryHeroCard";
-import { DataDictionaryResultsSection } from "@/features/data-dictionary/DataDictionaryResultsSection";
-import { DataDictionarySummaryCard } from "@/features/data-dictionary/DataDictionarySummaryCard";
-import type { DataDictionaryWorkspaceProps } from "@/features/data-dictionary/dataDictionaryWorkspaceTypes";
-import { useDataDictionaryActions } from "@/features/data-dictionary/useDataDictionaryActions";
+import { DataDictionaryHeroCard } from "@/features/data-dictionary/components/DataDictionaryHeroCard";
+import { DataDictionaryResultsSection } from "@/features/data-dictionary/components/DataDictionaryResultsSection";
+import { DataDictionarySummaryCard } from "@/features/data-dictionary/components/DataDictionarySummaryCard";
+import type { DataDictionaryWorkspaceProps } from "@/features/data-dictionary/types/dataDictionaryWorkspaceTypes";
+import { useDataDictionaryActions } from "@/features/data-dictionary/hooks/useDataDictionaryActions";
 
 export function DataDictionaryWorkspace({
   selectedCscPath,

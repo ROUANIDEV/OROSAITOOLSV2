@@ -2,11 +2,11 @@ import { BookOpen, GitBranch } from "lucide-react";
 
 import type { CallTreeWorkspaceState } from "@/features/call-tree/call-tree-state";
 import type { DataDictionaryWorkspaceState } from "@/features/data-dictionary/data-dictionary-state";
-import type { ReportDetails } from "@/features/reports/reportsTypes";
+import type { ReportDetails } from "@/features/reports/types/reportsTypes";
 import {
   buildExpectedReportPath,
   numberOrDash,
-} from "@/features/reports/reportsUtils";
+} from "@/features/reports/utils/reportsUtils";
 
 type BuildReportsArgs = {
   selectedCscPath: string | null;
