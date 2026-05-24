@@ -1,20 +1,18 @@
-import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+
+import type { ActiveToolProps } from "@/features/dashboard/dashboardTypes";
+import { getRequiredToolById } from "@/features/dashboard/dashboardToolSelectors";
 import { ThemeToggle } from "@/features/theme/theme-toggle";
-import { tools, type ToolId } from "@/features/dashboard/tool-config";
 
-type DashboardTopbarProps = {
-  activeTool: ToolId;
-};
-
-export function DashboardTopbar({ activeTool }: DashboardTopbarProps) {
-  const currentTool = tools.find((tool) => tool.id === activeTool) ?? tools[0];
+export function DashboardTopbar({ activeTool }: ActiveToolProps) {
+  const currentTool = getRequiredToolById(activeTool);
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur transition-[width,height] ease-linear">

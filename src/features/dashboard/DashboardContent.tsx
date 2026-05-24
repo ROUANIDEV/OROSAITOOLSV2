@@ -1,30 +1,13 @@
-import type { Dispatch, SetStateAction } from "react";
-
 import { CallTreeWorkspace } from "@/features/call-tree/CallTreeWorkspace";
-import type { CallTreeWorkspaceState } from "@/features/call-tree/call-tree-state";
 import { CProjectWorkspace } from "@/features/c-project/CProjectWorkspace";
-import type { CProjectWorkspaceState } from "@/features/c-project/c-project-state";
 import { CrcCalculatorWorkspace } from "@/features/crc/CrcCalculatorWorkspace";
 import { DataDictionaryWorkspace } from "@/features/data-dictionary/DataDictionaryWorkspace";
-import type { DataDictionaryWorkspaceState } from "@/features/data-dictionary/data-dictionary-state";
+import type { DashboardContentProps } from "@/features/dashboard/dashboardTypes";
+import { getToolById } from "@/features/dashboard/dashboardToolSelectors";
 import { DashboardOverview } from "@/features/dashboard/pages/DashboardOverview";
 import { ToolPlaceholder } from "@/features/dashboard/pages/ToolPlaceholder";
-import { tools, type ToolId } from "@/features/dashboard/tool-config";
 import { ReportsWorkspace } from "@/features/reports/ReportsWorkspace";
 import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
-
-type DashboardContentProps = {
-  activeTool: ToolId;
-  onToolChange: (tool: ToolId) => void;
-  cProjectState: CProjectWorkspaceState;
-  onCProjectStateChange: Dispatch<SetStateAction<CProjectWorkspaceState>>;
-  callTreeState: CallTreeWorkspaceState;
-  onCallTreeStateChange: Dispatch<SetStateAction<CallTreeWorkspaceState>>;
-  dataDictionaryState: DataDictionaryWorkspaceState;
-  onDataDictionaryStateChange: Dispatch<
-    SetStateAction<DataDictionaryWorkspaceState>
-  >;
-};
 
 export function DashboardContent({
   activeTool,
@@ -36,6 +19,12 @@ export function DashboardContent({
   dataDictionaryState,
   onDataDictionaryStateChange,
 }: DashboardContentProps) {
+  const selectedCscPath = cProjectState.selectedCscPath;
+
+  const openCProjectScanner = () => {
+    onToolChange("c-project");
+  };
+
   if (activeTool === "overview") {
     return <DashboardOverview onToolChange={onToolChange} />;
   }
@@ -52,8 +41,8 @@ export function DashboardContent({
   if (activeTool === "call-tree") {
     return (
       <CallTreeWorkspace
-        selectedCscPath={cProjectState.selectedCscPath}
-        onGoToCProjectScanner={() => onToolChange("c-project")}
+        selectedCscPath={selectedCscPath}
+        onGoToCProjectScanner={openCProjectScanner}
         state={callTreeState}
         onStateChange={onCallTreeStateChange}
       />
@@ -63,8 +52,8 @@ export function DashboardContent({
   if (activeTool === "data-dictionary") {
     return (
       <DataDictionaryWorkspace
-        selectedCscPath={cProjectState.selectedCscPath}
-        onGoToCProjectScanner={() => onToolChange("c-project")}
+        selectedCscPath={selectedCscPath}
+        onGoToCProjectScanner={openCProjectScanner}
         state={dataDictionaryState}
         onStateChange={onDataDictionaryStateChange}
       />
@@ -74,7 +63,7 @@ export function DashboardContent({
   if (activeTool === "reports") {
     return (
       <ReportsWorkspace
-        selectedCscPath={cProjectState.selectedCscPath}
+        selectedCscPath={selectedCscPath}
         callTreeState={callTreeState}
         dataDictionaryState={dataDictionaryState}
         onToolChange={onToolChange}
@@ -85,7 +74,7 @@ export function DashboardContent({
   if (activeTool === "settings") {
     return (
       <SettingsWorkspace
-        selectedCscPath={cProjectState.selectedCscPath}
+        selectedCscPath={selectedCscPath}
         onToolChange={onToolChange}
       />
     );
@@ -95,15 +84,12 @@ export function DashboardContent({
     return <CrcCalculatorWorkspace />;
   }
 
-  const tool = tools.find((item) => item.id === activeTool);
+  const tool = getToolById(activeTool);
 
   return (
     <ToolPlaceholder
-      title={tool?.title ?? "Workspace"}
-      description={
-        tool?.description ??
-        "This workspace is ready and will be implemented in a later step."
-      }
+      title={tool?.title ?? "Tool"}
+      description={tool?.description ?? "This workspace is coming soon."}
     />
   );
 }

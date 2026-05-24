@@ -14,19 +14,19 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { tools, type ToolId } from "@/features/dashboard/tool-config";
 
-type DashboardSidebarProps = {
-  activeTool: ToolId;
-  onToolChange: (tool: ToolId) => void;
-};
+import type { ToolNavigationProps } from "@/features/dashboard/dashboardTypes";
+import {
+  getMainTools,
+  getSettingsTool,
+} from "@/features/dashboard/dashboardToolSelectors";
 
 export function DashboardSidebar({
   activeTool,
   onToolChange,
-}: DashboardSidebarProps) {
-  const mainTools = tools.filter((tool) => tool.id !== "settings");
-  const settingsTool = tools.find((tool) => tool.id === "settings");
+}: ToolNavigationProps) {
+  const mainTools = getMainTools();
+  const settingsTool = getSettingsTool();
 
   return (
     <Sidebar
