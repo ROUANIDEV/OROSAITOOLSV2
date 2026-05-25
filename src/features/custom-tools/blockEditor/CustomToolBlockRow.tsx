@@ -8,9 +8,9 @@ import type {
   CustomToolBlock,
   CustomToolBlockType,
 } from "../model/customToolTypes";
+import { BlockConfigEditor } from "./BlockConfigEditor";
 import { defaultBlockConfigByType } from "./blockConfigPresets";
 import { blockTypeOptions, getBlockTypeLabel } from "./blockTypeOptions";
-import { BlockConfigEditor } from "./BlockConfigEditor";
 
 type CustomToolBlockRowProps = {
   block: CustomToolBlock;
@@ -38,60 +38,70 @@ export function CustomToolBlockRow({
       ...block,
       type,
       label: getBlockTypeLabel(type),
-      config: defaultBlockConfigByType[type],
+      config: { ...defaultBlockConfigByType[type] },
     });
   };
 
   return (
-    <div className="grid gap-4 rounded-xl border p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-4 rounded-lg border p-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium">Block #{index + 1}</p>
-          <p className="text-xs text-muted-foreground">{block.type}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {block.type}
+          </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            type="button"
             size="icon"
-            disabled={!canMoveUp}
+            variant="outline"
             onClick={onMoveUp}
+            disabled={!canMoveUp}
+            aria-label="Move block up"
           >
-            <ArrowUp className="size-4" />
+            <ArrowUp className="h-4 w-4" />
           </Button>
 
           <Button
-            variant="outline"
+            type="button"
             size="icon"
-            disabled={!canMoveDown}
+            variant="outline"
             onClick={onMoveDown}
+            disabled={!canMoveDown}
+            aria-label="Move block down"
           >
-            <ArrowDown className="size-4" />
+            <ArrowDown className="h-4 w-4" />
           </Button>
 
-          <Button variant="outline" size="icon" onClick={onRemove}>
-            <Trash2 className="size-4" />
+          <Button
+            type="button"
+            size="icon"
+            variant="destructive"
+            onClick={onRemove}
+            aria-label="Remove block"
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor={`${block.id}-label`}>Label</Label>
+        <label className="space-y-2 text-sm">
+          <span className="font-medium">Label</span>
           <Input
-            id={`${block.id}-label`}
             value={block.label}
             onChange={(event) =>
               onChange({ ...block, label: event.target.value })
             }
           />
-        </div>
+        </label>
 
-        <div className="grid gap-2">
-          <Label htmlFor={`${block.id}-type`}>Type</Label>
+        <label className="space-y-2 text-sm">
+          <span className="font-medium">Type</span>
           <select
-            id={`${block.id}-type`}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
             value={block.type}
             onChange={(event) =>
               updateType(event.target.value as CustomToolBlockType)
@@ -103,10 +113,10 @@ export function CustomToolBlockRow({
               </option>
             ))}
           </select>
-        </div>
+        </label>
       </div>
 
-      <div className="grid gap-2">
+      <div className="space-y-2">
         <Label htmlFor={`${block.id}-description`}>Description</Label>
         <Input
           id={`${block.id}-description`}
@@ -119,6 +129,7 @@ export function CustomToolBlockRow({
 
       <BlockConfigEditor
         blockId={block.id}
+        blockType={block.type}
         config={block.config}
         onConfigChange={(config) => onChange({ ...block, config })}
       />

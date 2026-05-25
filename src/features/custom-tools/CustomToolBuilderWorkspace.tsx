@@ -1,6 +1,12 @@
+import { useState } from "react";
+
 import { CustomToolWorkflowEditor } from "./blockEditor/CustomToolWorkflowEditor";
 import { BuilderHero } from "./BuilderHero";
 import { BuilderRoadmap } from "./BuilderRoadmap";
+import {
+  BuilderWorkspaceTabs,
+  type BuilderWorkspaceStage,
+} from "./BuilderWorkspaceTabs";
 import { DraftActions } from "./DraftActions";
 import { StarterBlockCatalog } from "./StarterBlockCatalog";
 import { ToolDraftSummary } from "./ToolDraftSummary";
@@ -20,16 +26,85 @@ import { CustomToolValidationPanel } from "./validation/CustomToolValidationPane
 
 export function CustomToolBuilderWorkspace() {
   const { draft, setDraft, saveStatus } = usePersistedCustomToolDraft();
+  const [activeStage, setActiveStage] =
+    useState<BuilderWorkspaceStage>("canvas");
 
   const updateDraftFromEditor = (nextDraft: CustomToolManifest) => {
     setDraft(markCustomToolDraftEdited(nextDraft));
   };
 
+  const createDraft = () => {
+    setDraft(createBlankCustomTool());
+    setActiveStage("overview");
+  };
+
+  const createHistoryTemplate = () => {
+    setDraft(createHistoryUpdaterTemplate());
+    setActiveStage("canvas");
+  };
+
+  const renderStage = () => {
+    if (!draft) return null;
+
+    switch (activeStage) {
+      case "overview":
+        return (
+          <>
+            <ToolDraftSummary draft={draft} />
+            <ToolMetadataEditor
+              draft={draft}
+              onDraftChange={updateDraftFromEditor}
+            />
+          </>
+        );
+      case "inputs":
+        return (
+          <CustomToolInputsEditor
+            draft={draft}
+            onDraftChange={updateDraftFromEditor}
+          />
+        );
+      case "canvas":
+        return (
+          <CustomToolWorkflowEditor
+            draft={draft}
+            onDraftChange={updateDraftFromEditor}
+          />
+        );
+      case "safety":
+        return (
+          <>
+            <CustomToolPermissionsEditor
+              draft={draft}
+              onDraftChange={updateDraftFromEditor}
+            />
+            <CustomToolValidationPanel draft={draft} />
+          </>
+        );
+      case "test":
+        return (
+          <CustomToolTestPanel
+            draft={draft}
+            onDraftChange={updateDraftFromEditor}
+          />
+        );
+      case "publish":
+        return (
+          <CustomToolPublishPanel
+            draft={draft}
+            onDraftChange={updateDraftFromEditor}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+    <div className="space-y-6">
       <BuilderHero
-        onCreateDraft={() => setDraft(createBlankCustomTool())}
-        onStartHistoryTemplate={() => setDraft(createHistoryUpdaterTemplate())}
+        onCreateDraft={createDraft}
+        onStartHistoryTemplate={createHistoryTemplate}
       />
 
       {draft ? (
@@ -39,41 +114,19 @@ export function CustomToolBuilderWorkspace() {
             onDiscardDraft={() => setDraft(null)}
           />
 
-          <section className="grid gap-4 lg:grid-cols-[1fr_340px]">
-            <div className="grid gap-4">
-              <ToolMetadataEditor
-                draft={draft}
-                onDraftChange={updateDraftFromEditor}
-              />
-              <CustomToolInputsEditor
-                draft={draft}
-                onDraftChange={updateDraftFromEditor}
-              />
-              <CustomToolWorkflowEditor
-                draft={draft}
-                onDraftChange={updateDraftFromEditor}
-              />
-              <ToolDraftSummary draft={draft} />
-            </div>
+          <BuilderWorkspaceTabs
+            activeStage={activeStage}
+            onStageChange={setActiveStage}
+          />
 
-            <div className="grid content-start gap-4">
-              <CustomToolValidationPanel draft={draft} />
-              <CustomToolTestPanel draft={draft} onDraftChange={setDraft} />
-              <CustomToolPublishPanel draft={draft} onDraftChange={setDraft} />
-              <CustomToolPermissionsEditor
-                draft={draft}
-                onDraftChange={updateDraftFromEditor}
-              />
-              <StarterBlockCatalog />
-            </div>
-          </section>
+          <div className="space-y-6">{renderStage()}</div>
         </>
       ) : (
-        <section className="grid gap-4 lg:grid-cols-[1fr_340px]">
-          <BuilderRoadmap />
+        <>
           <StarterBlockCatalog />
-        </section>
+          <BuilderRoadmap />
+        </>
       )}
-    </main>
+    </div>
   );
 }

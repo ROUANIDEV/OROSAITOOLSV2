@@ -43,23 +43,15 @@ export function CustomToolTestPanel({
   const [isRunning, setIsRunning] = useState(false);
 
   const inputValues = useMemo(() => {
-    return {
-      ...createInitialTestValues(draft),
-      ...values,
-    };
+    return { ...createInitialTestValues(draft), ...values };
   }, [draft, values]);
 
   const updateValue = (inputId: string, value: TestInputValues[string]) => {
-    setValues((currentValues) => ({
-      ...currentValues,
-      [inputId]: value,
-    }));
+    setValues((currentValues) => ({ ...currentValues, [inputId]: value }));
   };
 
   const runDryTest = async () => {
-    if (!validation.canPublish || isRunning) {
-      return;
-    }
+    if (!validation.canPublish || isRunning) return;
 
     setIsRunning(true);
 
@@ -123,7 +115,10 @@ export function CustomToolTestPanel({
 
         <TestRunLogs logs={logs} />
         <TestRunAppendPreviews previews={previews} />
-        <TestRunBlockOutputs outputs={outputs} />
+        <TestRunBlockOutputs
+          blocks={draft.workflow.blocks}
+          outputs={outputs}
+        />
       </CardContent>
     </Card>
   );

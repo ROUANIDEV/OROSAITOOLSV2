@@ -8,12 +8,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  createCustomToolRunErrorLog,
+  createCustomToolRunHistoryEntry,
+} from "@/features/custom-tools/history/createCustomToolRunHistoryEntry";
+import { addCustomToolRunHistoryEntry } from "@/features/custom-tools/history/customToolRunHistoryStorage";
 import type { CustomToolManifest } from "@/features/custom-tools/model/customToolTypes";
 import { runCustomToolDryRun } from "@/features/custom-tools/testRun/runCustomToolDryRun";
 import { TestRunAppendPreviews } from "@/features/custom-tools/testRun/TestRunAppendPreviews";
 import { TestRunBlockOutputs } from "@/features/custom-tools/testRun/TestRunBlockOutputs";
 import { TestRunLogs } from "@/features/custom-tools/testRun/TestRunLogs";
 import type { TestInputValues } from "@/features/custom-tools/testRun/testRunTypes";
+
 import { RunnerRealExecutionCard } from "./RunnerRealExecutionCard";
 
 type DryRunResult = Awaited<ReturnType<typeof runCustomToolDryRun>>;
@@ -21,9 +27,14 @@ type DryRunResult = Awaited<ReturnType<typeof runCustomToolDryRun>>;
 type RunnerDryRunCardProps = {
   tool: CustomToolManifest;
   values: TestInputValues;
+  onHistoryChange?: () => void;
 };
 
-export function RunnerDryRunCard({ tool, values }: RunnerDryRunCardProps) {
+export function RunnerDryRunCard({
+  tool,
+  values,
+  onHistoryChange,
+}: RunnerDryRunCardProps) {
   const [result, setResult] = useState<DryRunResult | null>(null);
   const [error, setError] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -35,13 +46,38 @@ export function RunnerDryRunCard({ tool, values }: RunnerDryRunCardProps) {
     try {
       const nextResult = await runCustomToolDryRun(tool, values);
       setResult(nextResult);
+
+      await addCustomToolRunHistoryEntry(
+        createCustomToolRunHistoryEntry({
+          tool,
+          runKind: "dry-run",
+          succeeded: nextResult.succeeded,
+          logs: nextResult.logs,
+          outputByBlockId: nextResult.outputByBlockId,
+          appendPreviews: nextResult.appendPreviews,
+        }),
+      );
+      onHistoryChange?.();
     } catch (caughtError) {
-      setResult(null);
-      setError(
+      const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "The dry run failed unexpectedly.",
+          : "The dry run failed unexpectedly.";
+
+      setResult(null);
+      setError(message);
+
+      await addCustomToolRunHistoryEntry(
+        createCustomToolRunHistoryEntry({
+          tool,
+          runKind: "dry-run",
+          succeeded: false,
+          logs: [createCustomToolRunErrorLog(message)],
+          outputByBlockId: {},
+          errorMessage: message,
+        }),
       );
+      onHistoryChange?.();
     } finally {
       setIsRunning(false);
     }
@@ -69,13 +105,20 @@ export function RunnerDryRunCard({ tool, values }: RunnerDryRunCardProps) {
             <>
               <TestRunLogs logs={result.logs} />
               <TestRunAppendPreviews previews={result.appendPreviews} />
-              <TestRunBlockOutputs outputs={result.outputByBlockId} />
+              <TestRunBlockOutputs
+                blocks={tool.workflow.blocks}
+                outputs={result.outputByBlockId}
+              />
             </>
           ) : null}
         </CardContent>
       </Card>
 
-      <RunnerRealExecutionCard tool={tool} values={values} />
+      <RunnerRealExecutionCard
+        tool={tool}
+        values={values}
+        onHistoryChange={onHistoryChange}
+      />
     </div>
   );
 }

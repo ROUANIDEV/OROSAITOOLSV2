@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import {
   Card,
   CardContent,
@@ -6,13 +7,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CustomToolRunHistoryPanel } from "@/features/custom-tools/history/CustomToolRunHistoryPanel";
 import type { CustomToolManifest } from "@/features/custom-tools/model/customToolTypes";
 import { loadPublishedCustomTools } from "@/features/custom-tools/storage/publishedCustomToolsStorage";
 import { createInitialTestValues } from "@/features/custom-tools/testRun/createInitialTestValues";
 import type { TestInputValues } from "@/features/custom-tools/testRun/testRunTypes";
-import { RunnerDryRunCard } from "@/features/custom-tools/runner/RunnerDryRunCard";
-import { RunnerInputForm } from "@/features/custom-tools/runner/RunnerInputForm";
-import { findRunnerTool } from "@/features/custom-tools/runner/runnerToolResolver";
+
+import { RunnerDryRunCard } from "./RunnerDryRunCard";
+import { RunnerInputForm } from "./RunnerInputForm";
+import { findRunnerTool } from "./runnerToolResolver";
 
 const REGISTRY_CHANGED_EVENT = "custom-tools-registry-changed";
 
@@ -27,6 +30,7 @@ export function CustomToolRunnerWorkspace({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [values, setValues] = useState<TestInputValues>({});
+  const [historyRefreshSignal, setHistoryRefreshSignal] = useState(0);
 
   const loadTools = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -89,13 +93,14 @@ export function CustomToolRunnerWorkspace({
     }));
   };
 
+  const refreshHistory = () => {
+    setHistoryRefreshSignal((currentSignal) => currentSignal + 1);
+  };
+
   if (isLoading) {
     return (
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Custom tool runner
-        </h1>
-        <p className="text-muted-foreground">
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">
           Loading the published tool definition...
         </p>
       </div>
@@ -132,8 +137,8 @@ export function CustomToolRunnerWorkspace({
         <p className="text-sm font-medium text-muted-foreground">
           Published custom tool
         </p>
-        <h1 className="text-3xl font-bold tracking-tight">{tool.name}</h1>
-        <p className="max-w-3xl text-muted-foreground">{tool.description}</p>
+        <h1 className="text-2xl font-semibold">{tool.name}</h1>
+        <p className="text-muted-foreground">{tool.description}</p>
       </div>
 
       <Card>
@@ -152,7 +157,16 @@ export function CustomToolRunnerWorkspace({
         </CardContent>
       </Card>
 
-      <RunnerDryRunCard tool={tool} values={values} />
+      <RunnerDryRunCard
+        tool={tool}
+        values={values}
+        onHistoryChange={refreshHistory}
+      />
+
+      <CustomToolRunHistoryPanel
+        tool={tool}
+        refreshSignal={historyRefreshSignal}
+      />
     </div>
   );
 }
