@@ -3,8 +3,12 @@ import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+import type { CustomToolBlockType } from "../model/customToolTypes";
+import { PythonBlockConfigEditor } from "./PythonBlockConfigEditor";
+
 type BlockConfigEditorProps = {
   blockId: string;
+  blockType: CustomToolBlockType;
   config: Record<string, unknown>;
   onConfigChange: (config: Record<string, unknown>) => void;
 };
@@ -25,6 +29,7 @@ function parseConfig(value: string) {
 
 export function BlockConfigEditor({
   blockId,
+  blockType,
   config,
   onConfigChange,
 }: BlockConfigEditorProps) {
@@ -47,20 +52,26 @@ export function BlockConfigEditor({
     }
   };
 
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={`${blockId}-config`}>Config JSON</Label>
+  if (blockType === "python.code") {
+    return (
+      <PythonBlockConfigEditor
+        blockId={blockId}
+        config={config}
+        onConfigChange={onConfigChange}
+      />
+    );
+  }
 
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`${blockId}-config`}>Config JSON</Label>
       <Textarea
         id={`${blockId}-config`}
+        className="min-h-40 font-mono text-xs"
         value={configText}
-        rows={7}
-        spellCheck={false}
-        className="font-mono text-xs"
         onBlur={commitConfig}
         onChange={(event) => setConfigText(event.target.value)}
       />
-
       {error ? (
         <p className="text-xs text-destructive">{error}</p>
       ) : (

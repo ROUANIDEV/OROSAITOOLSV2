@@ -9,6 +9,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { runCustomToolExecution } from "@/features/custom-tools/execution/runCustomToolExecution";
+import {
+  createCustomToolRunErrorLog,
+  createCustomToolRunHistoryEntry,
+} from "@/features/custom-tools/history/createCustomToolRunHistoryEntry";
+import { addCustomToolRunHistoryEntry } from "@/features/custom-tools/history/customToolRunHistoryStorage";
 import type { CustomToolManifest } from "@/features/custom-tools/model/customToolTypes";
 import { TestRunAppendPreviews } from "@/features/custom-tools/testRun/TestRunAppendPreviews";
 import { TestRunBlockOutputs } from "@/features/custom-tools/testRun/TestRunBlockOutputs";
@@ -20,11 +25,13 @@ type ExecutionResult = Awaited<ReturnType<typeof runCustomToolExecution>>;
 type RunnerRealExecutionCardProps = {
   tool: CustomToolManifest;
   values: TestInputValues;
+  onHistoryChange?: () => void;
 };
 
 export function RunnerRealExecutionCard({
   tool,
   values,
+  onHistoryChange,
 }: RunnerRealExecutionCardProps) {
   const [confirmation, setConfirmation] = useState("");
   const [result, setResult] = useState<ExecutionResult | null>(null);
@@ -42,10 +49,8 @@ export function RunnerRealExecutionCard({
   const permissionBlocked =
     (hasAppendBlocks && !tool.permissions.fileWrite) ||
     (hasPythonBlocks && !tool.permissions.python);
-
   const confirmationBlocked =
     hasAppendBlocks && confirmation.trim() !== "APPEND";
-
   const canExecute = !permissionBlocked && !confirmationBlocked && !isRunning;
 
   const runExecution = async () => {
@@ -55,13 +60,39 @@ export function RunnerRealExecutionCard({
     try {
       const nextResult = await runCustomToolExecution(tool, values, confirmation);
       setResult(nextResult);
+
+      await addCustomToolRunHistoryEntry(
+        createCustomToolRunHistoryEntry({
+          tool,
+          runKind: "confirmed",
+          succeeded: nextResult.succeeded,
+          logs: nextResult.logs,
+          outputByBlockId: nextResult.outputByBlockId,
+          appendPreviews: nextResult.appendPreviews,
+          bytesAppended: nextResult.bytesAppended,
+        }),
+      );
+      onHistoryChange?.();
     } catch (caughtError) {
-      setResult(null);
-      setError(
+      const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Confirmed execution failed unexpectedly.",
+          : "Confirmed execution failed unexpectedly.";
+
+      setResult(null);
+      setError(message);
+
+      await addCustomToolRunHistoryEntry(
+        createCustomToolRunHistoryEntry({
+          tool,
+          runKind: "confirmed",
+          succeeded: false,
+          logs: [createCustomToolRunErrorLog(message)],
+          outputByBlockId: {},
+          errorMessage: message,
+        }),
       );
+      onHistoryChange?.();
     } finally {
       setIsRunning(false);
     }
@@ -117,7 +148,10 @@ export function RunnerRealExecutionCard({
           <>
             <TestRunLogs logs={result.logs} />
             <TestRunAppendPreviews previews={result.appendPreviews} />
-            <TestRunBlockOutputs outputs={result.outputByBlockId} />
+            <TestRunBlockOutputs
+              blocks={tool.workflow.blocks}
+              outputs={result.outputByBlockId}
+            />
           </>
         ) : null}
       </CardContent>
