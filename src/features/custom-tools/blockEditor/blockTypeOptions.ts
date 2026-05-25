@@ -1,47 +1,59 @@
 import type { CustomToolBlockType } from "../model/customToolTypes";
 
-export const blockTypeOptions: Array<{
+export type CustomToolBlockTypeOption = {
   value: CustomToolBlockType;
   label: string;
   description: string;
-}> = [
+};
+
+export const blockTypeOptions: CustomToolBlockTypeOption[] = [
   {
     value: "file.glob",
     label: "Find files",
-    description: "Find files in a selected folder using a glob pattern.",
+    description: "Scan a selected folder with a glob pattern.",
   },
   {
     value: "file.read",
     label: "Read file",
-    description: "Read text content from a selected file.",
-  },
-  {
-    value: "file.appendText",
-    label: "Append text",
-    description: "Append generated text to a target file.",
+    description: "Represent a file-read step in the workflow model.",
   },
   {
     value: "text.template",
-    label: "Template text",
-    description: "Generate text using input values and previous block results.",
-  },
-  {
-    value: "safety.preview",
-    label: "Preview change",
-    description: "Show a preview before writing changes to files.",
-  },
-  {
-    value: "safety.confirm",
-    label: "Ask confirmation",
-    description: "Require the user to confirm before continuing.",
+    label: "Text template",
+    description: "Render text from inputs and previous block outputs.",
   },
   {
     value: "python.code",
     label: "Python code",
-    description: "Run controlled Python code with JSON input and output.",
+    description: "Run Python with JSON stdin/stdout and a strict timeout.",
+  },
+  {
+    value: "safety.preview",
+    label: "Preview",
+    description: "Show generated output before any real action.",
+  },
+  {
+    value: "file.appendText",
+    label: "Append text",
+    description: "Append generated text after confirmation.",
+  },
+  {
+    value: "safety.confirm",
+    label: "Confirmation",
+    description: "Require explicit confirmation before a real action.",
   },
 ];
 
+export const customToolBlockTypeOptions = blockTypeOptions;
+
 export function getBlockTypeLabel(type: CustomToolBlockType) {
-  return blockTypeOptions.find((option) => option.value === type)?.label ?? type;
+  return (
+    blockTypeOptions.find((option) => option.value === type)?.label ?? type
+  );
+}
+
+export function getBlockTypeDescription(type: CustomToolBlockType) {
+  return (
+    blockTypeOptions.find((option) => option.value === type)?.description ?? ""
+  );
 }

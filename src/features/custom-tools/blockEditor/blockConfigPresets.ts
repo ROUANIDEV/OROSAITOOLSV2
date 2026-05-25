@@ -1,5 +1,18 @@
 import type { CustomToolBlockType } from "../model/customToolTypes";
 
+const pythonStarterCode = [
+  "import json",
+  "import sys",
+  "",
+  "payload = json.load(sys.stdin)",
+  "inputs = payload.get(\"inputs\", {})",
+  "",
+  "print(json.dumps({",
+  "    \"ok\": True,",
+  "    \"inputKeys\": list(inputs.keys())",
+  "}))",
+].join("\n");
+
 export const defaultBlockConfigByType: Record<
   CustomToolBlockType,
   Record<string, unknown>
@@ -11,21 +24,32 @@ export const defaultBlockConfigByType: Record<
   "file.read": {
     fileInput: "",
   },
-  "file.appendText": {
-    targetInput: "",
-    textFromBlock: "",
-  },
   "text.template": {
-    template: "Hello {{name}}",
+    template: "",
+  },
+  "python.code": {
+    code: pythonStarterCode,
+    timeoutMs: 5000,
   },
   "safety.preview": {
     title: "Preview changes",
   },
-  "safety.confirm": {
-    message: "Do you want to continue?",
+  "file.appendText": {
+    targetInput: "",
   },
-  "python.code": {
-    code: "import json\nimport sys\n\npayload = json.load(sys.stdin)\njson.dump(payload, sys.stdout)",
-    timeoutSeconds: 10,
+  "safety.confirm": {
+    message: "Confirm before applying changes.",
   },
 };
+
+export const blockConfigPresets = defaultBlockConfigByType;
+
+export function getBlockConfigPreset(type: CustomToolBlockType) {
+  return {
+    ...(defaultBlockConfigByType[type] ?? {}),
+  };
+}
+
+export function createBlockConfigPreset(type: CustomToolBlockType) {
+  return getBlockConfigPreset(type);
+}

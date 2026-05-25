@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,8 +10,11 @@ import {
 } from "@/components/ui/card";
 import type { CustomToolManifest } from "@/features/custom-tools/model/customToolTypes";
 import { runCustomToolDryRun } from "@/features/custom-tools/testRun/runCustomToolDryRun";
+import { TestRunAppendPreviews } from "@/features/custom-tools/testRun/TestRunAppendPreviews";
+import { TestRunBlockOutputs } from "@/features/custom-tools/testRun/TestRunBlockOutputs";
 import { TestRunLogs } from "@/features/custom-tools/testRun/TestRunLogs";
 import type { TestInputValues } from "@/features/custom-tools/testRun/testRunTypes";
+import { RunnerRealExecutionCard } from "./RunnerRealExecutionCard";
 
 type DryRunResult = Awaited<ReturnType<typeof runCustomToolDryRun>>;
 
@@ -44,27 +48,34 @@ export function RunnerDryRunCard({ tool, values }: RunnerDryRunCardProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Dry-run execution</CardTitle>
-        <CardDescription>
-          Simulate this published tool without reading or writing real files.
-        </CardDescription>
-      </CardHeader>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Dry-run execution</CardTitle>
+          <CardDescription>
+            Simulate this published tool without writing files and inspect block
+            outputs.
+          </CardDescription>
+        </CardHeader>
 
-      <CardContent className="space-y-4">
-        <Button type="button" onClick={runDryRun} disabled={isRunning}>
-          {isRunning ? "Running dry run..." : "Run dry run"}
-        </Button>
+        <CardContent className="space-y-4">
+          <Button type="button" onClick={runDryRun} disabled={isRunning}>
+            {isRunning ? "Running dry run..." : "Run dry run"}
+          </Button>
 
-        {error ? (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        ) : null}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-        {result ? <TestRunLogs logs={result.logs} /> : null}
-      </CardContent>
-    </Card>
+          {result ? (
+            <>
+              <TestRunLogs logs={result.logs} />
+              <TestRunAppendPreviews previews={result.appendPreviews} />
+              <TestRunBlockOutputs outputs={result.outputByBlockId} />
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <RunnerRealExecutionCard tool={tool} values={values} />
+    </div>
   );
 }
