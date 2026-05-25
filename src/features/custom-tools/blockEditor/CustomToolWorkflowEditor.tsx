@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SetStateAction } from "react";
 
 import {
   Card,
@@ -13,6 +13,7 @@ import type {
   CustomToolBlockType,
   CustomToolManifest,
 } from "../model/customToolTypes";
+
 import { BuiltInBlockPalette } from "./BuiltInBlockPalette";
 import { createCustomToolBlock } from "./createCustomToolBlock";
 import { WorkflowBlockSettingsDialog } from "./WorkflowBlockSettingsDialog";
@@ -20,15 +21,18 @@ import { WorkflowCanvas } from "./WorkflowCanvas";
 import { WorkflowDeleteBlockDialog } from "./WorkflowDeleteBlockDialog";
 import { WorkflowDeleteSelectedBlocksDialog } from "./WorkflowDeleteSelectedBlocksDialog";
 import { WorkflowDragGhost } from "./WorkflowDragGhost";
+
 import {
   getBlockLayout,
   withBlockLayout,
   type WorkflowBlockLayout,
 } from "./workflowCanvasLayout";
+
 import {
   DEFAULT_WORKFLOW_CANVAS_VIEWPORT,
   type WorkflowCanvasViewport,
 } from "./workflowCanvasViewport";
+
 import {
   addWorkflowConnection,
   getWorkflowConnections,
@@ -39,14 +43,73 @@ import {
   type WorkflowConnectionStyle,
   type WorkflowWithVisualConnections,
 } from "./workflowConnections";
+
 import { useWorkflowPointerDrag } from "./useWorkflowPointerDrag";
 
 type CustomToolWorkflowEditorProps = {
   draft: CustomToolManifest;
+  session?: CustomToolWorkflowEditorSession;
+  onSessionChange?: (session: CustomToolWorkflowEditorSession) => void;
   onDraftChange: (draft: CustomToolManifest) => void;
 };
 
 type WorkflowSnapshot = CustomToolManifest["workflow"];
+
+export type CustomToolWorkflowEditorSession = {
+  paletteCollapsed: boolean;
+  viewport: WorkflowCanvasViewport;
+  pastWorkflows: WorkflowSnapshot[];
+  futureWorkflows: WorkflowSnapshot[];
+  selectedBlockId: string | null;
+  selectedBlockIds: string[];
+  selectedConnectionId: string | null;
+};
+
+function createDefaultWorkflowEditorSession(): CustomToolWorkflowEditorSession {
+  return {
+    paletteCollapsed: true,
+    viewport: DEFAULT_WORKFLOW_CANVAS_VIEWPORT,
+    pastWorkflows: [],
+    futureWorkflows: [],
+    selectedBlockId: null,
+    selectedBlockIds: [],
+    selectedConnectionId: null,
+  };
+}
+
+function normalizeWorkflowEditorSession(
+  session?: CustomToolWorkflowEditorSession,
+): CustomToolWorkflowEditorSession {
+  const defaults = createDefaultWorkflowEditorSession();
+
+  if (!session) return defaults;
+
+  return {
+    ...defaults,
+    ...session,
+    viewport: {
+      ...defaults.viewport,
+      ...session.viewport,
+    },
+    pastWorkflows: Array.isArray(session.pastWorkflows)
+      ? session.pastWorkflows
+      : [],
+    futureWorkflows: Array.isArray(session.futureWorkflows)
+      ? session.futureWorkflows
+      : [],
+    selectedBlockIds: Array.isArray(session.selectedBlockIds)
+      ? session.selectedBlockIds
+      : [],
+  };
+}
+
+function resolveStateAction<T>(action: SetStateAction<T>, currentValue: T): T {
+  if (typeof action === "function") {
+    return (action as (value: T) => T)(currentValue);
+  }
+
+  return action;
+}
 
 function moveBlock(blocks: CustomToolBlock[], from: number, to: number) {
   if (from < 0 || to < 0 || from >= blocks.length || to >= blocks.length) {
@@ -55,6 +118,7 @@ function moveBlock(blocks: CustomToolBlock[], from: number, to: number) {
 
   const nextBlocks = [...blocks];
   const [movedBlock] = nextBlocks.splice(from, 1);
+
   nextBlocks.splice(to, 0, movedBlock);
 
   return nextBlocks;
@@ -85,34 +149,98 @@ function isEditableKeyboardTarget(target: EventTarget | null) {
 
 export function CustomToolWorkflowEditor({
   draft,
+  session,
+  onSessionChange,
   onDraftChange,
 }: CustomToolWorkflowEditorProps) {
   const blocks = draft.workflow.blocks;
   const connections = getWorkflowConnections(draft);
-  const [paletteCollapsed, setPaletteCollapsed] = useState(true);
-  const [viewport, setViewport] = useState<WorkflowCanvasViewport>(
-    DEFAULT_WORKFLOW_CANVAS_VIEWPORT,
+
+  const [localSession, setLocalSession] =
+    useState<CustomToolWorkflowEditorSession>(() =>
+      createDefaultWorkflowEditorSession(),
+    );
+
+  const currentSession = normalizeWorkflowEditorSession(
+    session ?? localSession,
   );
-  const [pastWorkflows, setPastWorkflows] = useState<WorkflowSnapshot[]>([]);
-  const [futureWorkflows, setFutureWorkflows] = useState<WorkflowSnapshot[]>([]);
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<
-    string | null
-  >(null);
+
+  const {
+    paletteCollapsed,
+    viewport,
+    pastWorkflows,
+    futureWorkflows,
+    selectedBlockId,
+    selectedBlockIds,
+    selectedConnectionId,
+  } = currentSession;
+
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [deleteBlockId, setDeleteBlockId] = useState<string | null>(null);
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
+
+  const commitSession = (
+    action: SetStateAction<CustomToolWorkflowEditorSession>,
+  ) => {
+    const nextSession = resolveStateAction(action, currentSession);
+
+    if (onSessionChange) {
+      onSessionChange(nextSession);
+      return;
+    }
+
+    setLocalSession(nextSession);
+  };
+
+  const setSessionField = <Key extends keyof CustomToolWorkflowEditorSession>(
+    key: Key,
+    action: SetStateAction<CustomToolWorkflowEditorSession[Key]>,
+  ) => {
+    commitSession((currentValue) => ({
+      ...currentValue,
+      [key]: resolveStateAction(action, currentValue[key]),
+    }));
+  };
+
+  const setPaletteCollapsed = (value: SetStateAction<boolean>) => {
+    setSessionField("paletteCollapsed", value);
+  };
+
+  const setViewport = (value: SetStateAction<WorkflowCanvasViewport>) => {
+    setSessionField("viewport", value);
+  };
+
+  const setPastWorkflows = (value: SetStateAction<WorkflowSnapshot[]>) => {
+    setSessionField("pastWorkflows", value);
+  };
+
+  const setFutureWorkflows = (value: SetStateAction<WorkflowSnapshot[]>) => {
+    setSessionField("futureWorkflows", value);
+  };
+
+  const setSelectedBlockId = (value: SetStateAction<string | null>) => {
+    setSessionField("selectedBlockId", value);
+  };
+
+  const setSelectedBlockIds = (value: SetStateAction<string[]>) => {
+    setSessionField("selectedBlockIds", value);
+  };
+
+  const setSelectedConnectionId = (value: SetStateAction<string | null>) => {
+    setSessionField("selectedConnectionId", value);
+  };
 
   const selectedBlockNames = blocks
     .filter((block) => selectedBlockIds.includes(block.id))
     .map((block) => block.label);
 
   const commitWorkflow = (workflow: WorkflowSnapshot) => {
-    setPastWorkflows((currentPast) => {
-      return [...currentPast.slice(-39), draft.workflow];
-    });
-    setFutureWorkflows([]);
+    commitSession((currentValue) => ({
+      ...currentValue,
+      pastWorkflows: [...currentValue.pastWorkflows.slice(-39), draft.workflow],
+      futureWorkflows: [],
+    }));
+
     onDraftChange({
       ...draft,
       workflow,
@@ -135,10 +263,15 @@ export function CustomToolWorkflowEditor({
 
   const undoWorkflow = () => {
     const previousWorkflow = pastWorkflows[pastWorkflows.length - 1];
+
     if (!previousWorkflow) return;
 
-    setPastWorkflows((currentPast) => currentPast.slice(0, -1));
-    setFutureWorkflows((currentFuture) => [draft.workflow, ...currentFuture]);
+    commitSession((currentValue) => ({
+      ...currentValue,
+      pastWorkflows: currentValue.pastWorkflows.slice(0, -1),
+      futureWorkflows: [draft.workflow, ...currentValue.futureWorkflows],
+    }));
+
     onDraftChange({
       ...draft,
       workflow: previousWorkflow,
@@ -147,10 +280,15 @@ export function CustomToolWorkflowEditor({
 
   const redoWorkflow = () => {
     const nextWorkflow = futureWorkflows[0];
+
     if (!nextWorkflow) return;
 
-    setFutureWorkflows((currentFuture) => currentFuture.slice(1));
-    setPastWorkflows((currentPast) => [...currentPast, draft.workflow]);
+    commitSession((currentValue) => ({
+      ...currentValue,
+      futureWorkflows: currentValue.futureWorkflows.slice(1),
+      pastWorkflows: [...currentValue.pastWorkflows, draft.workflow],
+    }));
+
     onDraftChange({
       ...draft,
       workflow: nextWorkflow,
@@ -163,8 +301,6 @@ export function CustomToolWorkflowEditor({
     const selectedIds = new Set(selectedBlockIds);
     const nextBlocks = blocks.filter((block) => !selectedIds.has(block.id));
 
-    // Only remove connections that are directly related to deleted blocks.
-    // Connections between remaining blocks are preserved.
     const nextConnections = connections.filter((connection) => {
       return (
         !selectedIds.has(connection.fromBlockId) &&
@@ -175,6 +311,7 @@ export function CustomToolWorkflowEditor({
     commitWorkflow(
       withBlocksAndConnections(draft, nextBlocks, nextConnections).workflow,
     );
+
     setSelectedBlockId(null);
     setSelectedBlockIds([]);
     setSelectedConnectionId(null);
@@ -183,6 +320,7 @@ export function CustomToolWorkflowEditor({
 
   const requestDeleteSelectedBlocks = () => {
     if (selectedBlockIds.length === 0) return;
+
     setDeleteSelectedOpen(true);
   };
 
@@ -250,6 +388,7 @@ export function CustomToolWorkflowEditor({
         y: point.y - 75,
       }),
     ]);
+
     setSelectedBlockIds([block.id]);
     setSelectedBlockId(block.id);
   };
@@ -261,6 +400,7 @@ export function CustomToolWorkflowEditor({
       ...blocks,
       withBlockLayout(block, getBlockLayout(block, blocks.length)),
     ]);
+
     setSelectedBlockIds([block.id]);
     setSelectedBlockId(block.id);
   };
@@ -270,6 +410,7 @@ export function CustomToolWorkflowEditor({
     point: { x: number; y: number },
   ) => {
     const block = blocks[fromIndex];
+
     if (!block) return;
 
     const draggedLayout = getBlockLayout(block, fromIndex);
@@ -304,6 +445,7 @@ export function CustomToolWorkflowEditor({
     updateBlocks(
       blocks.map((block, index) => {
         if (block.id !== blockId) return block;
+
         return withBlockLayout(block, layout, index);
       }),
     );
@@ -312,18 +454,20 @@ export function CustomToolWorkflowEditor({
   const removeBlock = (blockId: string) => {
     const nextBlocks = blocks.filter((block) => block.id !== blockId);
 
-    // Only remove connections attached to this deleted block.
     const nextConnections = connections.filter((connection) => {
       return (
-        connection.fromBlockId !== blockId && connection.toBlockId !== blockId
+        connection.fromBlockId !== blockId &&
+        connection.toBlockId !== blockId
       );
     });
 
     commitWorkflow(
       withBlocksAndConnections(draft, nextBlocks, nextConnections).workflow,
     );
+
     setDeleteBlockId(null);
     setSelectedConnectionId(null);
+
     setSelectedBlockIds((currentIds) =>
       currentIds.filter((currentId) => currentId !== blockId),
     );
@@ -347,10 +491,13 @@ export function CustomToolWorkflowEditor({
 
   const editingBlock =
     blocks.find((block) => block.id === editingBlockId) ?? null;
+
   const editingIndex = editingBlock
     ? blocks.findIndex((block) => block.id === editingBlock.id)
     : -1;
-  const deleteBlock = blocks.find((block) => block.id === deleteBlockId) ?? null;
+
+  const deleteBlock =
+    blocks.find((block) => block.id === deleteBlockId) ?? null;
 
   const changeConnectionStyle = (
     connectionId: string,
@@ -389,6 +536,7 @@ export function CustomToolWorkflowEditor({
   const selectSingleBlock = (blockId: string) => {
     setSelectedBlockId(blockId);
     setSelectedBlockIds([blockId]);
+    setSelectedConnectionId(null);
   };
 
   const selectBlocks = (blockIds: string[]) => {
@@ -403,25 +551,12 @@ export function CustomToolWorkflowEditor({
         <CardTitle>Visual workflow builder</CardTitle>
         <CardDescription>
           Use an unbounded canvas with area selection, group movement, preview
-          arrows, and confirmed group deletion.
+          arrows, persistent undo/redo, and confirmed group deletion.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-5">
-        <div
-          className={
-            paletteCollapsed
-              ? "grid items-stretch gap-5 xl:grid-cols-[8rem_minmax(0,1fr)]"
-              : "grid items-stretch gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]"
-          }
-        >
-          <BuiltInBlockPalette
-            collapsed={paletteCollapsed}
-            onCollapsedChange={setPaletteCollapsed}
-            onAddBlock={addBlockFromButton}
-            onStartDrag={startNewBlockDrag}
-          />
-
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
           <WorkflowCanvas
             canvasRef={canvasRef}
             blocks={blocks}
@@ -451,6 +586,7 @@ export function CustomToolWorkflowEditor({
                   return connection.id !== connectionId;
                 }),
               );
+
               setSelectedConnectionId(null);
             }}
             onConnectionStyleChange={changeConnectionStyle}
@@ -459,15 +595,23 @@ export function CustomToolWorkflowEditor({
             onDeleteBlock={setDeleteBlockId}
             onBlockLayoutChange={updateBlockLayout}
             onStartBlockDrag={(index, event) => {
-              startExistingBlockDrag(
-                index,
-                blocks[index].label,
-                blocks[index].type,
-                event,
-              );
+              const block = blocks[index];
+
+              if (!block) return;
+
+              startExistingBlockDrag(index, block.label, block.type, event);
             }}
           />
+
+          <BuiltInBlockPalette
+            collapsed={paletteCollapsed}
+            onCollapsedChange={setPaletteCollapsed}
+            onAddBlock={addBlockFromButton}
+            onStartDrag={startNewBlockDrag}
+          />
         </div>
+
+        <WorkflowDragGhost activeDrag={activeDrag} />
 
         <WorkflowBlockSettingsDialog
           block={editingBlock}
@@ -482,12 +626,12 @@ export function CustomToolWorkflowEditor({
               ),
             );
           }}
-          onMoveUp={() =>
-            updateBlocks(moveBlock(blocks, editingIndex, editingIndex - 1))
-          }
-          onMoveDown={() =>
-            updateBlocks(moveBlock(blocks, editingIndex, editingIndex + 1))
-          }
+          onMoveUp={() => {
+            updateBlocks(moveBlock(blocks, editingIndex, editingIndex - 1));
+          }}
+          onMoveDown={() => {
+            updateBlocks(moveBlock(blocks, editingIndex, editingIndex + 1));
+          }}
           onRemove={() => {
             if (editingBlock) removeBlock(editingBlock.id);
           }}
@@ -507,8 +651,6 @@ export function CustomToolWorkflowEditor({
           onCancel={() => setDeleteSelectedOpen(false)}
           onConfirm={deleteSelectedBlocks}
         />
-
-        <WorkflowDragGhost activeDrag={activeDrag} />
       </CardContent>
     </Card>
   );

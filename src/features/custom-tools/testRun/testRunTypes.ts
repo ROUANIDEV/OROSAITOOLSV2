@@ -8,6 +8,13 @@ export type TestRunLog = {
   message: string;
 };
 
+export type TestRunExecutionPlanItem = {
+  blockId: string;
+  blockLabel: string;
+  blockType: string;
+  stepIndex: number;
+};
+
 export type TestRunAppendPreview = {
   id: string;
   blockId: string;
@@ -19,6 +26,7 @@ export type TestRunAppendPreview = {
 
 export type TestRunResult = {
   logs: TestRunLog[];
+  executionPlan: TestRunExecutionPlanItem[];
   outputByBlockId: Record<string, unknown>;
   appendPreviews: TestRunAppendPreview[];
   succeeded: boolean;

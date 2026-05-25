@@ -1,22 +1,14 @@
 import type {
   CustomToolBlock,
   CustomToolManifest,
+  CustomToolWorkflowConnection,
 } from "../model/customToolTypes";
 
-export type WorkflowConnectionStyle = "solid" | "dashed" | "curved";
+export type { WorkflowConnectionStyle } from "../model/customToolTypes";
 
-export type WorkflowConnection = {
-  id: string;
-  fromBlockId: string;
-  toBlockId: string;
-  fromPortId?: string;
-  toPortId?: string;
-  style: WorkflowConnectionStyle;
-};
+export type WorkflowConnection = CustomToolWorkflowConnection;
 
-export type WorkflowWithVisualConnections = CustomToolManifest["workflow"] & {
-  visualConnections?: WorkflowConnection[];
-};
+export type WorkflowWithVisualConnections = CustomToolManifest["workflow"];
 
 function createConnectionId(fromBlockId: string, toBlockId: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -28,7 +20,7 @@ function createConnectionId(fromBlockId: string, toBlockId: string) {
     .slice(2)}`;
 }
 
-function isConnectionStyle(value: unknown): value is WorkflowConnectionStyle {
+function isConnectionStyle(value: unknown): value is WorkflowConnection["style"] {
   return value === "solid" || value === "dashed" || value === "curved";
 }
 
@@ -83,14 +75,13 @@ export function createOrderedWorkflowConnections(blocks: CustomToolBlock[]) {
 }
 
 export function getWorkflowConnections(draft: CustomToolManifest) {
-  const workflow = draft.workflow as WorkflowWithVisualConnections;
   const blockIds = new Set(draft.workflow.blocks.map((block) => block.id));
 
-  if (!Array.isArray(workflow.visualConnections)) {
+  if (!Array.isArray(draft.workflow.visualConnections)) {
     return createOrderedWorkflowConnections(draft.workflow.blocks);
   }
 
-  return workflow.visualConnections
+  return draft.workflow.visualConnections
     .map((connection) => sanitizeConnection(connection, blockIds))
     .filter((connection): connection is WorkflowConnection => {
       return Boolean(connection);
@@ -106,7 +97,7 @@ export function withWorkflowConnections(
     workflow: {
       ...draft.workflow,
       visualConnections: connections,
-    } as WorkflowWithVisualConnections,
+    },
   };
 }
 
@@ -135,11 +126,15 @@ export function addWorkflowConnection(
 export function updateConnectionStyle(
   connections: WorkflowConnection[],
   connectionId: string,
-  style: WorkflowConnectionStyle,
+  style: WorkflowConnection["style"],
 ) {
   return connections.map((connection) => {
     if (connection.id !== connectionId) return connection;
-    return { ...connection, style };
+
+    return {
+      ...connection,
+      style,
+    };
   });
 }
 
