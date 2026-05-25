@@ -14,12 +14,41 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-
+import { usePublishedCustomToolRoutes } from "@/features/custom-tools/registry/usePublishedCustomToolRoutes";
 import type { ToolNavigationProps } from "@/features/dashboard/dashboardTypes";
 import {
   getMainTools,
   getSettingsTool,
 } from "@/features/dashboard/dashboardToolSelectors";
+import { DashboardSidebarToolItem } from "./DashboardSidebarToolItem";
+
+function SidebarBrand({
+  onToolChange,
+}: Pick<ToolNavigationProps, "onToolChange">) {
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          tooltip="OROSAITOOLS"
+          size="lg"
+          onClick={() => onToolChange("overview")}
+          className="rounded-xl"
+        >
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Wrench className="size-4" />
+          </div>
+
+          <div className="grid text-sm leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="font-semibold">OROSAITOOLS</span>
+            <span className="text-xs text-muted-foreground">
+              C tooling desktop app
+            </span>
+          </div>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
 
 export function DashboardSidebar({
   activeTool,
@@ -27,82 +56,68 @@ export function DashboardSidebar({
 }: ToolNavigationProps) {
   const mainTools = getMainTools();
   const settingsTool = getSettingsTool();
+  const customTools = usePublishedCustomToolRoutes();
 
   return (
-    <Sidebar
-      collapsible="offcanvas"
-      variant="inset"
-      className="border-sidebar-border/70"
-    >
+    <Sidebar collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              isActive={activeTool === "overview"}
-              onClick={() => onToolChange("overview")}
-              className="rounded-xl"
-            >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <Wrench className="size-4" />
-              </div>
-
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">OROSAITOOLS</span>
-                <span className="truncate text-xs text-sidebar-foreground/70">
-                  C tooling desktop app
-                </span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <SidebarBrand onToolChange={onToolChange} />
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Workspaces</SidebarGroupLabel>
-
           <SidebarGroupContent>
             <SidebarMenu>
               {mainTools.map((tool) => (
-                <SidebarMenuItem key={tool.id}>
-                  <SidebarMenuButton
-                    isActive={activeTool === tool.id}
-                    tooltip={tool.title}
-                    onClick={() => onToolChange(tool.id)}
-                    className="h-9 rounded-xl"
-                  >
-                    <tool.icon />
-                    <span>{tool.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <DashboardSidebarToolItem
+                  key={tool.id}
+                  tool={tool}
+                  activeTool={activeTool}
+                  onToolChange={onToolChange}
+                />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {customTools.length > 0 ? (
+          <SidebarGroup>
+            <SidebarGroupLabel>Custom tools</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {customTools.map((tool) => (
+                  <DashboardSidebarToolItem
+                    key={tool.id}
+                    tool={tool}
+                    activeTool={activeTool}
+                    onToolChange={onToolChange}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
 
-      {settingsTool && (
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                isActive={activeTool === settingsTool.id}
-                tooltip={settingsTool.title}
-                onClick={() => onToolChange(settingsTool.id)}
-                className="h-9 rounded-xl"
-              >
-                <settingsTool.icon />
-                <span>{settingsTool.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
+      <SidebarFooter>
+        <SidebarMenu>
+          {settingsTool ? (
+            <DashboardSidebarToolItem
+              tool={settingsTool}
+              activeTool={activeTool}
+              onToolChange={onToolChange}
+            />
+          ) : null}
+        </SidebarMenu>
 
-          <Badge variant="secondary" className="mx-2 justify-center rounded-lg">
-            Local Tauri app
-          </Badge>
-        </SidebarFooter>
-      )}
+        <Badge
+          variant="outline"
+          className="w-fit group-data-[collapsible=icon]:hidden"
+        >
+          Local Tauri app
+        </Badge>
+      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>

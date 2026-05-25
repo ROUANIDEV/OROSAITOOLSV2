@@ -1,7 +1,6 @@
 export const tauriCommandNames = {
   splashscreenReady: "splashscreen_ready",
   frontendReady: "frontend_ready",
-
   getAppInfo: "get_app_info",
 
   scanCProjectWorkspace: "scan_c_project_workspace",
@@ -14,7 +13,15 @@ export const tauriCommandNames = {
   analyzeDataDictionary: "analyze_data_dictionary",
   exportDataDictionaryXlsx: "export_data_dictionary_xlsx",
 
+  calculateCrc: "calculate_crc",
+
   revealPathInFileManager: "reveal_path_in_file_manager",
+
+  appDataPath: "app_data_path",
+  appDataReveal: "app_data_reveal",
+  appDataRead: "app_data_read",
+  appDataWrite: "app_data_write",
+  appDataDelete: "app_data_delete",
 } as const;
 
 export type TauriCommandName =

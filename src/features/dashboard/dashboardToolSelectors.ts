@@ -1,3 +1,5 @@
+import { Wrench } from "lucide-react";
+
 import {
   tools,
   type ToolConfig,
@@ -7,8 +9,21 @@ import {
 export const DEFAULT_TOOL_ID: ToolId = "overview";
 export const SETTINGS_TOOL_ID: ToolId = "settings";
 
+function createCustomToolFallback(toolId: ToolId): ToolConfig | undefined {
+  if (!toolId.startsWith("custom:")) {
+    return undefined;
+  }
+
+  return {
+    id: toolId,
+    title: "Custom tool",
+    description: "Published custom tool.",
+    icon: Wrench,
+  };
+}
+
 export function getToolById(toolId: ToolId): ToolConfig | undefined {
-  return tools.find((tool) => tool.id === toolId);
+  return tools.find((tool) => tool.id === toolId) ?? createCustomToolFallback(toolId);
 }
 
 export function getRequiredToolById(toolId: ToolId): ToolConfig {
