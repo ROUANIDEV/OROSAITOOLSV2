@@ -2,119 +2,97 @@ import type {
   CustomToolBlock,
   CustomToolManifest,
 } from "../model/customToolTypes";
-import { renderTemplate } from "./templateRenderer";
-import type { TestInputValues, TestRunLog, TestRunResult } from "./testRunTypes";
+import {
+  runFileReadBlock,
+  runSafetyConfirmBlock,
+  runSafetyPreviewBlock,
+  runTextTemplateBlock,
+} from "./dryRunBasicBlocks";
+import type { DryRunContext } from "./dryRunContext";
+import { createTestRunLog } from "./dryRunLogs";
+import {
+  runAppendTextBlock,
+  runFileGlobBlock,
+} from "./dryRunFileBlocks";
+import { runPythonCodeBlock } from "./dryRunPythonBlock";
+import type { TestInputValues, TestRunResult } from "./testRunTypes";
 
-function createLog(level: TestRunLog["level"], message: string): TestRunLog {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    level,
-    message,
-  };
-}
+export type RunCustomToolDryRunOptions = {
+  executePython?: boolean;
+};
 
-function getTextConfig(block: CustomToolBlock, key: string) {
-  const value = block.config[key];
-
-  return typeof value === "string" ? value : "";
-}
-
-function getInputValue(values: TestInputValues, inputId: string) {
-  return values[inputId] ?? "";
-}
-
-function runBlock(
+async function runBlock(
   block: CustomToolBlock,
-  values: TestInputValues,
-  outputByBlockId: Record<string, unknown>,
-  logs: TestRunLog[],
+  draft: CustomToolManifest,
+  context: DryRunContext,
+  options: RunCustomToolDryRunOptions,
 ) {
   if (block.type === "file.glob") {
-    const rootInput = getTextConfig(block, "rootInput");
-    const pattern = getTextConfig(block, "pattern");
-
-    logs.push(
-      createLog(
-        "info",
-        `Would search "${getInputValue(values, rootInput)}" using pattern "${pattern}".`,
-      ),
-    );
-
-    outputByBlockId[block.id] = {
-      kind: "fileList",
-      files: [],
-      fileCount: 0,
-    };
-
-    return;
+    return await runFileGlobBlock(block, context);
   }
 
   if (block.type === "file.read") {
-    const fileInput = getTextConfig(block, "fileInput");
-    logs.push(createLog("info", `Would read file "${getInputValue(values, fileInput)}".`));
-    outputByBlockId[block.id] = "";
-    return;
+    return runFileReadBlock(block, context);
   }
 
   if (block.type === "text.template") {
-    const template = getTextConfig(block, "template");
-    const rendered = renderTemplate(template, {
-      inputs: values,
-      extraValues: {
-        date: new Date().toISOString().slice(0, 10),
-        fileCount: 0,
-      },
-    });
+    return runTextTemplateBlock(block, context);
+  }
 
-    logs.push(createLog("success", `Rendered template: ${rendered}`));
-    outputByBlockId[block.id] = rendered;
-    return;
+  if (block.type === "python.code") {
+    return await runPythonCodeBlock(block, context, {
+      executePython: options.executePython === true,
+      pythonPermission: draft.permissions.python,
+    });
   }
 
   if (block.type === "safety.preview") {
-    logs.push(createLog("info", `Would show preview for "${block.label}".`));
-    outputByBlockId[block.id] = null;
-    return;
+    return runSafetyPreviewBlock(block, context);
   }
 
   if (block.type === "file.appendText") {
-    const targetInput = getTextConfig(block, "targetInput");
-    logs.push(
-      createLog(
-        "warning",
-        `Would append generated text to "${getInputValue(values, targetInput)}".`,
-      ),
-    );
-    outputByBlockId[block.id] = null;
-    return;
+    return runAppendTextBlock(block, context);
   }
 
   if (block.type === "safety.confirm") {
-    logs.push(createLog("info", `Would ask confirmation: "${getTextConfig(block, "message")}".`));
-    outputByBlockId[block.id] = true;
-    return;
+    return runSafetyConfirmBlock(block, context);
   }
 
-  logs.push(createLog("warning", `Dry run does not execute "${block.type}" yet.`));
+  context.logs.push(
+    createTestRunLog("warning", `Dry run does not execute "${block.type}" yet.`),
+  );
+  return true;
 }
 
-export function runCustomToolDryRun(
+export async function runCustomToolDryRun(
   draft: CustomToolManifest,
   values: TestInputValues,
-): TestRunResult {
-  const logs: TestRunLog[] = [
-    createLog("info", `Starting dry run for "${draft.name}".`),
-  ];
-  const outputByBlockId: Record<string, unknown> = {};
+  options: RunCustomToolDryRunOptions = {},
+): Promise<TestRunResult> {
+  const context: DryRunContext = {
+    values,
+    logs: [createTestRunLog("info", `Starting dry run for "${draft.name}".`)],
+    outputByBlockId: {},
+    appendPreviews: [],
+  };
 
-  draft.workflow.blocks.forEach((block) => {
-    runBlock(block, values, outputByBlockId, logs);
-  });
+  let succeeded = true;
 
-  logs.push(createLog("success", "Dry run completed without real file changes."));
+  for (const block of draft.workflow.blocks) {
+    const blockSucceeded = await runBlock(block, draft, context, options);
+    succeeded = succeeded && blockSucceeded;
+  }
+
+  context.logs.push(
+    succeeded
+      ? createTestRunLog("success", "Dry run completed without file writes.")
+      : createTestRunLog("error", "Dry run finished with errors."),
+  );
 
   return {
-    logs,
-    outputByBlockId,
+    logs: context.logs,
+    outputByBlockId: context.outputByBlockId,
+    appendPreviews: context.appendPreviews,
+    succeeded,
   };
 }

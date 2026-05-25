@@ -15,6 +15,10 @@ export const tauriCommandNames = {
 
   calculateCrc: "calculate_crc",
 
+  customToolScanFiles: "custom_tool_scan_files",
+  customToolAppendText: "custom_tool_append_text",
+  customToolRunPython: "custom_tool_run_python",
+
   revealPathInFileManager: "reveal_path_in_file_manager",
 
   appDataPath: "app_data_path",

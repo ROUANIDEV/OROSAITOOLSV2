@@ -14,10 +14,17 @@ import { markCustomToolDraftTested } from "../model/customToolDraftLifecycle";
 import type { CustomToolManifest } from "../model/customToolTypes";
 import { validateCustomToolDraft } from "../validation/customToolValidation";
 import { createInitialTestValues } from "./createInitialTestValues";
+import { createTestRunLog } from "./dryRunLogs";
 import { runCustomToolDryRun } from "./runCustomToolDryRun";
+import { TestRunAppendPreviews } from "./TestRunAppendPreviews";
+import { TestRunBlockOutputs } from "./TestRunBlockOutputs";
 import { TestRunInputField } from "./TestRunInputField";
 import { TestRunLogs } from "./TestRunLogs";
-import type { TestInputValues, TestRunLog } from "./testRunTypes";
+import type {
+  TestInputValues,
+  TestRunAppendPreview,
+  TestRunLog,
+} from "./testRunTypes";
 
 type CustomToolTestPanelProps = {
   draft: CustomToolManifest;
@@ -29,10 +36,11 @@ export function CustomToolTestPanel({
   onDraftChange,
 }: CustomToolTestPanelProps) {
   const validation = validateCustomToolDraft(draft);
-  const [values, setValues] = useState<TestInputValues>(() =>
-    createInitialTestValues(draft),
-  );
+  const [values, setValues] = useState(() => createInitialTestValues(draft));
   const [logs, setLogs] = useState<TestRunLog[]>([]);
+  const [previews, setPreviews] = useState<TestRunAppendPreview[]>([]);
+  const [outputs, setOutputs] = useState<Record<string, unknown>>({});
+  const [isRunning, setIsRunning] = useState(false);
 
   const inputValues = useMemo(() => {
     return {
@@ -48,11 +56,34 @@ export function CustomToolTestPanel({
     }));
   };
 
-  const runDryTest = () => {
-    const result = runCustomToolDryRun(draft, inputValues);
+  const runDryTest = async () => {
+    if (!validation.canPublish || isRunning) {
+      return;
+    }
 
-    setLogs(result.logs);
-    onDraftChange(markCustomToolDraftTested(draft));
+    setIsRunning(true);
+
+    try {
+      const result = await runCustomToolDryRun(draft, inputValues);
+      setLogs(result.logs);
+      setPreviews(result.appendPreviews);
+      setOutputs(result.outputByBlockId);
+
+      if (result.succeeded) {
+        onDraftChange(markCustomToolDraftTested(draft));
+      }
+    } catch (error) {
+      setPreviews([]);
+      setOutputs({});
+      setLogs([
+        createTestRunLog(
+          "error",
+          error instanceof Error ? error.message : "Dry run failed unexpectedly.",
+        ),
+      ]);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
@@ -60,25 +91,28 @@ export function CustomToolTestPanel({
       <CardHeader>
         <CardTitle>Dry run test</CardTitle>
         <CardDescription>
-          Test the workflow model without reading or writing real files.
+          Test the workflow model without writing files. Outputs are shown so
+          each block result can be inspected.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="grid gap-4">
-        <div className="grid gap-3">
-          {draft.inputs.map((input) => (
-            <TestRunInputField
-              key={input.id}
-              input={input}
-              value={inputValues[input.id]}
-              onValueChange={(value) => updateValue(input.id, value)}
-            />
-          ))}
-        </div>
+      <CardContent className="space-y-4">
+        {draft.inputs.map((input) => (
+          <TestRunInputField
+            key={input.id}
+            input={input}
+            value={inputValues[input.id]}
+            onValueChange={(value) => updateValue(input.id, value)}
+          />
+        ))}
 
-        <Button disabled={!validation.canPublish} onClick={runDryTest}>
-          <PlayCircle className="size-4" />
-          Run dry test
+        <Button
+          type="button"
+          onClick={runDryTest}
+          disabled={!validation.canPublish || isRunning}
+        >
+          <PlayCircle className="mr-2 h-4 w-4" />
+          {isRunning ? "Running dry test..." : "Run dry test"}
         </Button>
 
         {!validation.canPublish ? (
@@ -88,6 +122,8 @@ export function CustomToolTestPanel({
         ) : null}
 
         <TestRunLogs logs={logs} />
+        <TestRunAppendPreviews previews={previews} />
+        <TestRunBlockOutputs outputs={outputs} />
       </CardContent>
     </Card>
   );

@@ -1,41 +1,56 @@
 import type { CustomToolManifest } from "../model/customToolTypes";
-import { pushValidationMessage } from "./validationHelpers";
-import type { CustomToolValidationMessage } from "./validationTypes";
+
+type PermissionValidationIssue = {
+  id: string;
+  level: "error" | "warning";
+  message: string;
+};
+
+function createIssue(message: string): PermissionValidationIssue {
+  return {
+    id: `permission-${message.toLowerCase().replace(/\W+/g, "-")}`,
+    level: "error",
+    message,
+  };
+}
 
 export function validatePermissions(
   draft: CustomToolManifest,
-  messages: CustomToolValidationMessage[],
-) {
-  const blockTypes = draft.workflow.blocks.map((block) => block.type);
-  const hasFileBlock = blockTypes.some((type) => type.startsWith("file."));
+): PermissionValidationIssue[] {
+  const issues: PermissionValidationIssue[] = [];
+  const blocks = draft.workflow.blocks;
 
-  if (hasFileBlock && !draft.permissions.fileRead) {
-    pushValidationMessage(
-      messages,
-      "warning",
-      "file-read-permission-disabled",
-      "File read permission is disabled",
-      "File blocks usually need file read permission enabled.",
-    );
+  const usesFileRead = blocks.some((block) => {
+    return block.type === "file.glob" || block.type === "file.read";
+  });
+
+  const usesFileWrite = blocks.some((block) => {
+    return block.type === "file.appendText";
+  });
+
+  const usesPython = blocks.some((block) => {
+    return block.type === "python.code";
+  });
+
+  if (usesFileRead && !draft.permissions.fileRead) {
+    issues.push(createIssue("File read blocks require fileRead permission."));
   }
 
-  if (blockTypes.includes("file.appendText") && !draft.permissions.fileWrite) {
-    pushValidationMessage(
-      messages,
-      "warning",
-      "file-write-permission-disabled",
-      "File write permission is disabled",
-      "Append blocks need file write permission before real runs.",
-    );
+  if (usesFileWrite && !draft.permissions.fileWrite) {
+    issues.push(createIssue("Append blocks require fileWrite permission."));
   }
 
-  if (blockTypes.includes("python.code") && !draft.permissions.python) {
-    pushValidationMessage(
-      messages,
-      "warning",
-      "python-permission-disabled",
-      "Python permission is disabled",
-      "Python blocks need explicit permission before execution.",
-    );
+  if (usesPython && !draft.permissions.python) {
+    issues.push(createIssue("Python blocks require python permission."));
   }
+
+  if (draft.permissions.network) {
+    issues.push({
+      id: "permission-network-warning",
+      level: "warning",
+      message: "Network permission is reserved for future controlled execution.",
+    });
+  }
+
+  return issues;
 }

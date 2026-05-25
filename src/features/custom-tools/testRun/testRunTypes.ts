@@ -8,7 +8,18 @@ export type TestRunLog = {
   message: string;
 };
 
+export type TestRunAppendPreview = {
+  id: string;
+  blockId: string;
+  blockLabel: string;
+  targetPath: string;
+  appendedText: string;
+  diffText: string;
+};
+
 export type TestRunResult = {
   logs: TestRunLog[];
   outputByBlockId: Record<string, unknown>;
+  appendPreviews: TestRunAppendPreview[];
+  succeeded: boolean;
 };
