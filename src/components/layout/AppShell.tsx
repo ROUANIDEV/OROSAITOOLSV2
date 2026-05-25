@@ -1,7 +1,7 @@
 import type { AppInfo } from "../../lib/tauri";
 import type { ToolDefinition } from "../../features/tools/toolRegistry";
 import { CscSelector } from "../../features/c-project/components/csc/CscSelector";
-import { ProjectScanPanel } from "../../features/c-project/ProjectScanPanel";
+import { ProjectScanPanel } from "../../features/c-project/components/scanner/ProjectScanPanel";
 import { ProjectFolderSelector } from "./ProjectFolderSelector";
 
 type AppShellProps = {

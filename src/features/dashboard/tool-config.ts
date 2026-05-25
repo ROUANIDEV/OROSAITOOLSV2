@@ -9,16 +9,22 @@ import {
   Home,
   Settings2,
   Table2,
+  Workflow,
 } from "lucide-react";
 
-export type ToolId =
+export type BuiltInToolId =
   | "overview"
   | "c-project"
   | "call-tree"
   | "data-dictionary"
   | "crc-calculator"
   | "reports"
+  | "custom-tool-builder"
   | "settings";
+
+export type CustomToolRouteId = `custom:${string}`;
+
+export type ToolId = BuiltInToolId | CustomToolRouteId;
 
 export type ToolConfig = {
   id: ToolId;
@@ -65,6 +71,12 @@ export const tools: ToolConfig[] = [
     icon: Table2,
   },
   {
+    id: "custom-tool-builder",
+    title: "Custom Tool Builder",
+    description: "Design reusable tools with blocks, test runs, and publishing.",
+    icon: Workflow,
+  },
+  {
     id: "settings",
     title: "Settings",
     description: "Application preferences.",
@@ -75,8 +87,8 @@ export const tools: ToolConfig[] = [
 export const dashboardStats = [
   {
     title: "Tool workspaces",
-    value: "6",
-    description: "Scanner, analyzers, CRC, reports, and settings.",
+    value: "7",
+    description: "Scanner, analyzers, CRC, reports, custom builder, and settings.",
     icon: BarChart3,
   },
   {
@@ -94,5 +106,8 @@ export const dashboardStats = [
 ];
 
 export function isToolId(value: unknown): value is ToolId {
-  return typeof value === "string" && tools.some((tool) => tool.id === value);
+  return (
+    typeof value === "string" &&
+    (tools.some((tool) => tool.id === value) || value.startsWith("custom:"))
+  );
 }
