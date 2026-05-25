@@ -17,6 +17,17 @@ export type CustomToolBlockType =
   | "safety.confirm"
   | "python.code";
 
+export type WorkflowConnectionStyle = "solid" | "dashed" | "curved";
+
+export type CustomToolWorkflowConnection = {
+  id: string;
+  fromBlockId: string;
+  toBlockId: string;
+  fromPortId?: string;
+  toPortId?: string;
+  style: WorkflowConnectionStyle;
+};
+
 export type CustomToolInput = {
   id: string;
   label: string;
@@ -43,6 +54,7 @@ export type CustomToolPermissionSet = {
 
 export type CustomToolWorkflow = {
   blocks: CustomToolBlock[];
+  visualConnections?: CustomToolWorkflowConnection[];
 };
 
 export type CustomToolManifest = {

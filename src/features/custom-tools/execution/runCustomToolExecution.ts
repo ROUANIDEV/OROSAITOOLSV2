@@ -4,6 +4,7 @@ import { runCustomToolDryRun } from "../testRun/runCustomToolDryRun";
 import type {
   TestInputValues,
   TestRunAppendPreview,
+  TestRunExecutionPlanItem,
   TestRunLog,
 } from "../testRun/testRunTypes";
 import { appendCustomToolText } from "./appendCustomToolText";
@@ -12,6 +13,7 @@ const REQUIRED_CONFIRMATION = "APPEND";
 
 export type CustomToolExecutionResult = {
   logs: TestRunLog[];
+  executionPlan: TestRunExecutionPlanItem[];
   appendPreviews: TestRunAppendPreview[];
   outputByBlockId: Record<string, unknown>;
   bytesAppended: number;
@@ -21,6 +23,7 @@ export type CustomToolExecutionResult = {
 function emptyResult(logs: TestRunLog[]): CustomToolExecutionResult {
   return {
     logs,
+    executionPlan: [],
     appendPreviews: [],
     outputByBlockId: {},
     bytesAppended: 0,
@@ -45,18 +48,19 @@ export async function runCustomToolExecution(
     logs.push(
       createTestRunLog("error", "Real append execution requires fileWrite permission."),
     );
+
     return emptyResult(logs);
   }
 
   if (hasPythonBlocks && !tool.permissions.python) {
-    logs.push(
-      createTestRunLog("error", "Python execution requires python permission."),
-    );
+    logs.push(createTestRunLog("error", "Python execution requires python permission."));
+
     return emptyResult(logs);
   }
 
   if (hasAppendBlocks && confirmation.trim() !== REQUIRED_CONFIRMATION) {
     logs.push(createTestRunLog("error", "Type APPEND to confirm file writes."));
+
     return emptyResult(logs);
   }
 
@@ -73,6 +77,7 @@ export async function runCustomToolExecution(
 
     return {
       logs,
+      executionPlan: previewResult.executionPlan,
       appendPreviews: previewResult.appendPreviews,
       outputByBlockId: previewResult.outputByBlockId,
       bytesAppended: 0,
@@ -111,6 +116,7 @@ export async function runCustomToolExecution(
 
   return {
     logs,
+    executionPlan: previewResult.executionPlan,
     appendPreviews: previewResult.appendPreviews,
     outputByBlockId: previewResult.outputByBlockId,
     bytesAppended,

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +16,7 @@ import { addCustomToolRunHistoryEntry } from "@/features/custom-tools/history/cu
 import type { CustomToolManifest } from "@/features/custom-tools/model/customToolTypes";
 import { TestRunAppendPreviews } from "@/features/custom-tools/testRun/TestRunAppendPreviews";
 import { TestRunBlockOutputs } from "@/features/custom-tools/testRun/TestRunBlockOutputs";
+import { TestRunExecutionPlan } from "@/features/custom-tools/testRun/TestRunExecutionPlan";
 import { TestRunLogs } from "@/features/custom-tools/testRun/TestRunLogs";
 import type { TestInputValues } from "@/features/custom-tools/testRun/testRunTypes";
 
@@ -49,8 +49,10 @@ export function RunnerRealExecutionCard({
   const permissionBlocked =
     (hasAppendBlocks && !tool.permissions.fileWrite) ||
     (hasPythonBlocks && !tool.permissions.python);
+
   const confirmationBlocked =
     hasAppendBlocks && confirmation.trim() !== "APPEND";
+
   const canExecute = !permissionBlocked && !confirmationBlocked && !isRunning;
 
   const runExecution = async () => {
@@ -72,6 +74,7 @@ export function RunnerRealExecutionCard({
           bytesAppended: nextResult.bytesAppended,
         }),
       );
+
       onHistoryChange?.();
     } catch (caughtError) {
       const message =
@@ -92,6 +95,7 @@ export function RunnerRealExecutionCard({
           errorMessage: message,
         }),
       );
+
       onHistoryChange?.();
     } finally {
       setIsRunning(false);
@@ -99,7 +103,7 @@ export function RunnerRealExecutionCard({
   };
 
   return (
-    <Card className="border-destructive/40">
+    <Card>
       <CardHeader>
         <CardTitle>Confirmed workflow execution</CardTitle>
         <CardDescription>
@@ -109,15 +113,15 @@ export function RunnerRealExecutionCard({
 
       <CardContent className="space-y-4">
         {hasAppendBlocks && !tool.permissions.fileWrite ? (
-          <p className="text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             This tool needs fileWrite permission for append blocks.
-          </p>
+          </div>
         ) : null}
 
         {hasPythonBlocks && !tool.permissions.python ? (
-          <p className="text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             This tool needs python permission for Python blocks.
-          </p>
+          </div>
         ) : null}
 
         {hasAppendBlocks ? (
@@ -133,26 +137,28 @@ export function RunnerRealExecutionCard({
           </label>
         ) : null}
 
-        <Button
-          type="button"
-          variant="destructive"
-          onClick={runExecution}
-          disabled={!canExecute}
-        >
+        <Button onClick={runExecution} disabled={!canExecute}>
           {isRunning ? "Running..." : "Run confirmed workflow"}
         </Button>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        ) : null}
 
         {result ? (
-          <>
+          <div className="space-y-4">
+            <TestRunExecutionPlan plan={result.executionPlan} />
             <TestRunLogs logs={result.logs} />
+            <TestRunBlockOutputs outputs={result.outputByBlockId} />
             <TestRunAppendPreviews previews={result.appendPreviews} />
-            <TestRunBlockOutputs
-              blocks={tool.workflow.blocks}
-              outputs={result.outputByBlockId}
-            />
-          </>
+
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <span className="font-medium">Bytes appended:</span>{" "}
+              {result.bytesAppended}
+            </div>
+          </div>
         ) : null}
       </CardContent>
     </Card>

@@ -2,6 +2,7 @@ import type {
   CustomToolBlock,
   CustomToolManifest,
 } from "../model/customToolTypes";
+import { resolveVisualWorkflowOrder } from "../workflow/resolveVisualWorkflowOrder";
 import {
   runFileReadBlock,
   runSafetyConfirmBlock,
@@ -15,11 +16,28 @@ import {
   runFileGlobBlock,
 } from "./dryRunFileBlocks";
 import { runPythonCodeBlock } from "./dryRunPythonBlock";
-import type { TestInputValues, TestRunResult } from "./testRunTypes";
+import type {
+  TestInputValues,
+  TestRunExecutionPlanItem,
+  TestRunResult,
+} from "./testRunTypes";
 
 export type RunCustomToolDryRunOptions = {
   executePython?: boolean;
 };
+
+function createExecutionPlan(
+  blocks: CustomToolBlock[],
+): TestRunExecutionPlanItem[] {
+  return blocks.map((block, index) => {
+    return {
+      blockId: block.id,
+      blockLabel: block.label,
+      blockType: block.type,
+      stepIndex: index + 1,
+    };
+  });
+}
 
 async function runBlock(
   block: CustomToolBlock,
@@ -61,6 +79,7 @@ async function runBlock(
   context.logs.push(
     createTestRunLog("warning", `Dry run does not execute "${block.type}" yet.`),
   );
+
   return true;
 }
 
@@ -76,9 +95,43 @@ export async function runCustomToolDryRun(
     appendPreviews: [],
   };
 
+  const resolvedWorkflowOrder = resolveVisualWorkflowOrder(draft);
+
+  for (const message of resolvedWorkflowOrder.messages) {
+    context.logs.push(createTestRunLog(message.level, message.message));
+  }
+
+  if (!resolvedWorkflowOrder.succeeded) {
+    context.logs.push(
+      createTestRunLog(
+        "error",
+        "Dry run stopped because the visual workflow order is invalid.",
+      ),
+    );
+
+    return {
+      logs: context.logs,
+      executionPlan: [],
+      outputByBlockId: context.outputByBlockId,
+      appendPreviews: context.appendPreviews,
+      succeeded: false,
+    };
+  }
+
+  const executionPlan = createExecutionPlan(resolvedWorkflowOrder.blocks);
+
+  if (executionPlan.length > 0) {
+    context.logs.push(
+      createTestRunLog(
+        "info",
+        `Execution plan contains ${executionPlan.length} step(s).`,
+      ),
+    );
+  }
+
   let succeeded = true;
 
-  for (const block of draft.workflow.blocks) {
+  for (const block of resolvedWorkflowOrder.blocks) {
     const blockSucceeded = await runBlock(block, draft, context, options);
     succeeded = succeeded && blockSucceeded;
   }
@@ -91,6 +144,7 @@ export async function runCustomToolDryRun(
 
   return {
     logs: context.logs,
+    executionPlan,
     outputByBlockId: context.outputByBlockId,
     appendPreviews: context.appendPreviews,
     succeeded,

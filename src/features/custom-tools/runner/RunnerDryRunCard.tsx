@@ -1,5 +1,4 @@
 import { useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,9 +16,9 @@ import type { CustomToolManifest } from "@/features/custom-tools/model/customToo
 import { runCustomToolDryRun } from "@/features/custom-tools/testRun/runCustomToolDryRun";
 import { TestRunAppendPreviews } from "@/features/custom-tools/testRun/TestRunAppendPreviews";
 import { TestRunBlockOutputs } from "@/features/custom-tools/testRun/TestRunBlockOutputs";
+import { TestRunExecutionPlan } from "@/features/custom-tools/testRun/TestRunExecutionPlan";
 import { TestRunLogs } from "@/features/custom-tools/testRun/TestRunLogs";
 import type { TestInputValues } from "@/features/custom-tools/testRun/testRunTypes";
-
 import { RunnerRealExecutionCard } from "./RunnerRealExecutionCard";
 
 type DryRunResult = Awaited<ReturnType<typeof runCustomToolDryRun>>;
@@ -57,6 +56,7 @@ export function RunnerDryRunCard({
           appendPreviews: nextResult.appendPreviews,
         }),
       );
+
       onHistoryChange?.();
     } catch (caughtError) {
       const message =
@@ -77,6 +77,7 @@ export function RunnerDryRunCard({
           errorMessage: message,
         }),
       );
+
       onHistoryChange?.();
     } finally {
       setIsRunning(false);
@@ -89,27 +90,28 @@ export function RunnerDryRunCard({
         <CardHeader>
           <CardTitle>Dry-run execution</CardTitle>
           <CardDescription>
-            Simulate this published tool without writing files and inspect block
-            outputs.
+            Simulate this published tool without writing files and inspect block outputs.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <Button type="button" onClick={runDryRun} disabled={isRunning}>
+          <Button onClick={runDryRun} disabled={isRunning}>
             {isRunning ? "Running dry run..." : "Run dry run"}
           </Button>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          ) : null}
 
           {result ? (
-            <>
+            <div className="space-y-4">
+              <TestRunExecutionPlan plan={result.executionPlan} />
               <TestRunLogs logs={result.logs} />
+              <TestRunBlockOutputs outputs={result.outputByBlockId} />
               <TestRunAppendPreviews previews={result.appendPreviews} />
-              <TestRunBlockOutputs
-                blocks={tool.workflow.blocks}
-                outputs={result.outputByBlockId}
-              />
-            </>
+            </div>
           ) : null}
         </CardContent>
       </Card>
