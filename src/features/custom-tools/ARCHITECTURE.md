@@ -27,7 +27,7 @@ src/features/custom-tools/
 - `publishing` -> `registry/publishing`
 - `history` -> `registry/history`
 - `runner` -> `runtime/runner`
-- `files` -> `runtime/files`
+- `files` -> `runtime/file`
 - `runtime/model` -> `runtime/state`
 - `validation/components` -> `builder/components/validation`
 - `validation/model` -> `domain/validation/model`
