@@ -1,3 +1,5 @@
+import { stableTopologicalSort } from "@/shared/workflow";
+
 import type {
   CustomToolBlock,
   CustomToolManifest,
@@ -5,6 +7,11 @@ import type {
 } from "../../model/customToolTypes";
 
 type VisualConnectionLike = Partial<CustomToolWorkflowConnection>;
+
+type VisualWorkflowEdge = {
+  from: string;
+  to: string;
+};
 
 export type VisualWorkflowOrderMessage = {
   level: "info" | "warning" | "error";
@@ -19,51 +26,27 @@ export type VisualWorkflowOrderResult = {
 };
 
 function getVisualConnections(tool: CustomToolManifest): VisualConnectionLike[] {
-  return Array.isArray(tool.workflow.visualConnections)
-    ? tool.workflow.visualConnections
-    : [];
+  return Array.isArray(tool.workflow.visualConnections) ? tool.workflow.visualConnections : [];
 }
 
-function sortBlockIdsByOriginalOrder(
-  blockIds: string[],
-  originalIndexByBlockId: Map<string, number>,
-) {
-  return blockIds.sort((leftBlockId, rightBlockId) => {
+function createOriginalOrderComparator(originalIndexByBlockId: Map<string, number>) {
+  return (leftBlockId: string, rightBlockId: string) => {
     return (
       (originalIndexByBlockId.get(leftBlockId) ?? Number.MAX_SAFE_INTEGER) -
       (originalIndexByBlockId.get(rightBlockId) ?? Number.MAX_SAFE_INTEGER)
     );
-  });
+  };
 }
 
-export function resolveVisualWorkflowOrder(
-  tool: CustomToolManifest,
-): VisualWorkflowOrderResult {
-  const originalBlocks = tool.workflow.blocks;
-
-  const originalIndexByBlockId = new Map(
-    originalBlocks.map((block, index) => [block.id, index]),
-  );
-
-  const blockById = new Map(originalBlocks.map((block) => [block.id, block]));
-  const blockIds = new Set(blockById.keys());
-  const visualConnections = getVisualConnections(tool);
-
-  if (originalBlocks.length === 0 || visualConnections.length === 0) {
-    return {
-      blocks: originalBlocks,
-      messages: [],
-      usedVisualConnections: false,
-      succeeded: true,
-    };
-  }
-
+function resolveVisualWorkflowEdges(
+  visualConnections: VisualConnectionLike[],
+  blockIds: Set<string>,
+): {
+  edges: VisualWorkflowEdge[];
+  ignoredConnectionCount: number;
+} {
   const edgeKeys = new Set<string>();
-  const outgoingByBlockId = new Map<string, string[]>();
-  const incomingCountByBlockId = new Map(
-    originalBlocks.map((block) => [block.id, 0]),
-  );
-
+  const edges: VisualWorkflowEdge[] = [];
   let ignoredConnectionCount = 0;
 
   for (const connection of visualConnections) {
@@ -83,23 +66,51 @@ export function resolveVisualWorkflowOrder(
 
     const edgeKey = `${fromBlockId}->${toBlockId}`;
 
-    if (edgeKeys.has(edgeKey)) continue;
+    if (edgeKeys.has(edgeKey)) {
+      continue;
+    }
 
     edgeKeys.add(edgeKey);
-
-    const outgoing = outgoingByBlockId.get(fromBlockId) ?? [];
-    outgoing.push(toBlockId);
-    outgoingByBlockId.set(fromBlockId, outgoing);
-
-    incomingCountByBlockId.set(
-      toBlockId,
-      (incomingCountByBlockId.get(toBlockId) ?? 0) + 1,
-    );
+    edges.push({
+      from: fromBlockId,
+      to: toBlockId,
+    });
   }
+
+  return {
+    edges,
+    ignoredConnectionCount,
+  };
+}
+
+export function resolveVisualWorkflowOrder(
+  tool: CustomToolManifest,
+): VisualWorkflowOrderResult {
+  const originalBlocks = tool.workflow.blocks;
+  const originalIndexByBlockId = new Map(
+    originalBlocks.map((block, index) => [block.id, index]),
+  );
+  const blockById = new Map(originalBlocks.map((block) => [block.id, block]));
+  const blockIds = new Set(blockById.keys());
+  const visualConnections = getVisualConnections(tool);
+
+  if (originalBlocks.length === 0 || visualConnections.length === 0) {
+    return {
+      blocks: originalBlocks,
+      messages: [],
+      usedVisualConnections: false,
+      succeeded: true,
+    };
+  }
+
+  const { edges, ignoredConnectionCount } = resolveVisualWorkflowEdges(
+    visualConnections,
+    blockIds,
+  );
 
   const messages: VisualWorkflowOrderMessage[] = [];
 
-  if (edgeKeys.size === 0) {
+  if (edges.length === 0) {
     messages.push({
       level: "warning",
       message:
@@ -121,42 +132,16 @@ export function resolveVisualWorkflowOrder(
     });
   }
 
-  for (const outgoing of outgoingByBlockId.values()) {
-    sortBlockIdsByOriginalOrder(outgoing, originalIndexByBlockId);
-  }
+  const { orderedNodeIds, cyclicNodeIds } = stableTopologicalSort({
+    nodeIds: originalBlocks.map((block) => block.id),
+    edges,
+    compareNodeIds: createOriginalOrderComparator(originalIndexByBlockId),
+  });
 
-  const readyBlockIds = sortBlockIdsByOriginalOrder(
-    originalBlocks
-      .filter((block) => (incomingCountByBlockId.get(block.id) ?? 0) === 0)
-      .map((block) => block.id),
-    originalIndexByBlockId,
-  );
-
-  const orderedBlockIds: string[] = [];
-
-  while (readyBlockIds.length > 0) {
-    const blockId = readyBlockIds.shift();
-
-    if (!blockId) continue;
-
-    orderedBlockIds.push(blockId);
-
-    for (const nextBlockId of outgoingByBlockId.get(blockId) ?? []) {
-      const nextIncomingCount =
-        (incomingCountByBlockId.get(nextBlockId) ?? 0) - 1;
-
-      incomingCountByBlockId.set(nextBlockId, nextIncomingCount);
-
-      if (nextIncomingCount === 0) {
-        readyBlockIds.push(nextBlockId);
-        sortBlockIdsByOriginalOrder(readyBlockIds, originalIndexByBlockId);
-      }
-    }
-  }
-
-  if (orderedBlockIds.length !== originalBlocks.length) {
+  if (cyclicNodeIds.length > 0) {
+    const cyclicNodeIdSet = new Set(cyclicNodeIds);
     const blockedBlockLabels = originalBlocks
-      .filter((block) => !orderedBlockIds.includes(block.id))
+      .filter((block) => cyclicNodeIdSet.has(block.id))
       .map((block) => block.label)
       .join(", ");
 
@@ -175,11 +160,11 @@ export function resolveVisualWorkflowOrder(
 
   messages.push({
     level: "info",
-    message: `Resolved workflow execution order from ${edgeKeys.size} visual connection(s).`,
+    message: `Resolved workflow execution order from ${edges.length} visual connection(s).`,
   });
 
   return {
-    blocks: orderedBlockIds
+    blocks: orderedNodeIds
       .map((blockId) => blockById.get(blockId))
       .filter((block): block is CustomToolBlock => Boolean(block)),
     messages,

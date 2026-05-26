@@ -3,9 +3,6 @@ import type { ReactNode } from "react";
 import { CallTreeWorkspace } from "@/features/call-tree/CallTreeWorkspace";
 import { CProjectWorkspace } from "@/features/c-project/CProjectWorkspace";
 import { CrcCalculatorWorkspace } from "@/features/crc/CrcCalculatorWorkspace";
-import { isCustomToolRouteId } from "@/features/custom-tools/registry/customToolRoute";
-import { CustomToolRunnerWorkspace } from "@/features/custom-tools/runner/CustomToolRunnerWorkspace";
-import { CustomToolBuilderWorkspace } from "@/features/custom-tools/CustomToolBuilderWorkspace";
 import { DataDictionaryWorkspace } from "@/features/data-dictionary/DataDictionaryWorkspace";
 import type { DashboardContentProps } from "@/features/dashboard/dashboardTypes";
 import { getToolById } from "@/features/dashboard/dashboardToolSelectors";
@@ -14,6 +11,9 @@ import { ToolPlaceholder } from "@/features/dashboard/pages/ToolPlaceholder";
 import type { BuiltInToolId } from "@/features/dashboard/tool-config";
 import { ReportsWorkspace } from "@/features/reports/ReportsWorkspace";
 import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
+import { isCustomToolRouteId } from "../custom-tools/publishing";
+import { CustomToolBuilderWorkspace } from "../custom-tools/builder";
+import { CustomToolRunnerWorkspace } from "../custom-tools/runner";
 
 type WorkspaceRenderContext = DashboardContentProps & {
   selectedCscPath: DashboardContentProps["cProjectState"]["selectedCscPath"];
