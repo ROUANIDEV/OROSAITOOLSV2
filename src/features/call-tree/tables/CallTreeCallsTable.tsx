@@ -2,6 +2,7 @@ import {
   SmartDataTable,
   type SmartDataTableColumn,
 } from "@/components/smart-table/SmartDataTable";
+import { createSmartTextColumn } from "@/components/smart-table/smartTableColumns";
 import {
   getCallee,
   getCaller,
@@ -12,31 +13,29 @@ import type { CallTreeCall } from "@/lib/callTree";
 
 export function CallTreeCallsTable({ calls }: { calls: CallTreeCall[] }) {
   const columns: SmartDataTableColumn<CallTreeCall>[] = [
-    {
+    createSmartTextColumn({
       id: "caller",
       header: "Caller",
-      accessor: (row) => <span className="font-medium">{getCaller(row)}</span>,
-      searchValue: (row) => getCaller(row),
-    },
-    {
+      value: getCaller,
+      emphasized: true,
+    }),
+    createSmartTextColumn({
       id: "callee",
       header: "Callee",
-      accessor: (row) => <span className="font-medium">{getCallee(row)}</span>,
-      searchValue: (row) => getCallee(row),
-    },
-    {
+      value: getCallee,
+      emphasized: true,
+    }),
+    createSmartTextColumn({
       id: "file",
       header: "File",
-      accessor: (row) => getFile(row),
-      searchValue: (row) => getFile(row),
+      value: getFile,
       className: "max-w-[360px] truncate",
-    },
-    {
+    }),
+    createSmartTextColumn({
       id: "line",
       header: "Line",
-      accessor: (row) => getLine(row),
-      searchValue: (row) => String(getLine(row)),
-    },
+      value: getLine,
+    }),
   ];
 
   return (

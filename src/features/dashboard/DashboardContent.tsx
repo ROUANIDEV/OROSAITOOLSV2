@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { CallTreeWorkspace } from "@/features/call-tree/CallTreeWorkspace";
 import { CProjectWorkspace } from "@/features/c-project/CProjectWorkspace";
 import { CrcCalculatorWorkspace } from "@/features/crc/CrcCalculatorWorkspace";
@@ -9,90 +11,86 @@ import type { DashboardContentProps } from "@/features/dashboard/dashboardTypes"
 import { getToolById } from "@/features/dashboard/dashboardToolSelectors";
 import { DashboardOverview } from "@/features/dashboard/pages/DashboardOverview";
 import { ToolPlaceholder } from "@/features/dashboard/pages/ToolPlaceholder";
+import type { BuiltInToolId } from "@/features/dashboard/tool-config";
 import { ReportsWorkspace } from "@/features/reports/ReportsWorkspace";
 import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
 
-export function DashboardContent({
-  activeTool,
-  onToolChange,
-  cProjectState,
-  onCProjectStateChange,
-  callTreeState,
-  onCallTreeStateChange,
-  dataDictionaryState,
-  onDataDictionaryStateChange,
-}: DashboardContentProps) {
-  const selectedCscPath = cProjectState.selectedCscPath;
+type WorkspaceRenderContext = DashboardContentProps & {
+  selectedCscPath: DashboardContentProps["cProjectState"]["selectedCscPath"];
+  openCProjectScanner: () => void;
+};
 
-  const openCProjectScanner = () => {
-    onToolChange("c-project");
-  };
+type BuiltInWorkspaceRenderer = (context: WorkspaceRenderContext) => ReactNode;
+
+const builtInWorkspaceRenderers = {
+  overview: ({ onToolChange }) => <DashboardOverview onToolChange={onToolChange} />,
+
+  "c-project": ({ cProjectState, onCProjectStateChange }) => (
+    <CProjectWorkspace state={cProjectState} onStateChange={onCProjectStateChange} />
+  ),
+
+  "call-tree": ({
+    selectedCscPath,
+    openCProjectScanner,
+    callTreeState,
+    onCallTreeStateChange,
+  }) => (
+    <CallTreeWorkspace
+      selectedCscPath={selectedCscPath}
+      onGoToCProjectScanner={openCProjectScanner}
+      state={callTreeState}
+      onStateChange={onCallTreeStateChange}
+    />
+  ),
+
+  "data-dictionary": ({
+    selectedCscPath,
+    openCProjectScanner,
+    dataDictionaryState,
+    onDataDictionaryStateChange,
+  }) => (
+    <DataDictionaryWorkspace
+      selectedCscPath={selectedCscPath}
+      onGoToCProjectScanner={openCProjectScanner}
+      state={dataDictionaryState}
+      onStateChange={onDataDictionaryStateChange}
+    />
+  ),
+
+  reports: ({ selectedCscPath, callTreeState, dataDictionaryState, onToolChange }) => (
+    <ReportsWorkspace
+      selectedCscPath={selectedCscPath}
+      callTreeState={callTreeState}
+      dataDictionaryState={dataDictionaryState}
+      onToolChange={onToolChange}
+    />
+  ),
+
+  settings: ({ selectedCscPath, onToolChange }) => (
+    <SettingsWorkspace selectedCscPath={selectedCscPath} onToolChange={onToolChange} />
+  ),
+
+  "crc-calculator": () => <CrcCalculatorWorkspace />,
+
+  "custom-tool-builder": () => <CustomToolBuilderWorkspace />,
+} satisfies Record<BuiltInToolId, BuiltInWorkspaceRenderer>;
+
+export function DashboardContent(props: DashboardContentProps) {
+  const { activeTool, onToolChange, cProjectState } = props;
 
   if (isCustomToolRouteId(activeTool)) {
     return <CustomToolRunnerWorkspace routeId={activeTool} />;
   }
 
-  if (activeTool === "overview") {
-    return <DashboardOverview onToolChange={onToolChange} />;
-  }
+  const selectedCscPath = cProjectState.selectedCscPath;
+  const openCProjectScanner = () => {
+    onToolChange("c-project");
+  };
 
-  if (activeTool === "c-project") {
-    return (
-      <CProjectWorkspace
-        state={cProjectState}
-        onStateChange={onCProjectStateChange}
-      />
-    );
-  }
+  const renderWorkspace = builtInWorkspaceRenderers[activeTool];
 
-  if (activeTool === "call-tree") {
-    return (
-      <CallTreeWorkspace
-        selectedCscPath={selectedCscPath}
-        onGoToCProjectScanner={openCProjectScanner}
-        state={callTreeState}
-        onStateChange={onCallTreeStateChange}
-      />
-    );
-  }
-
-  if (activeTool === "data-dictionary") {
-    return (
-      <DataDictionaryWorkspace
-        selectedCscPath={selectedCscPath}
-        onGoToCProjectScanner={openCProjectScanner}
-        state={dataDictionaryState}
-        onStateChange={onDataDictionaryStateChange}
-      />
-    );
-  }
-
-  if (activeTool === "reports") {
-    return (
-      <ReportsWorkspace
-        selectedCscPath={selectedCscPath}
-        callTreeState={callTreeState}
-        dataDictionaryState={dataDictionaryState}
-        onToolChange={onToolChange}
-      />
-    );
-  }
-
-  if (activeTool === "settings") {
-    return (
-      <SettingsWorkspace
-        selectedCscPath={selectedCscPath}
-        onToolChange={onToolChange}
-      />
-    );
-  }
-
-  if (activeTool === "crc-calculator") {
-    return <CrcCalculatorWorkspace />;
-  }
-
-  if (activeTool === "custom-tool-builder") {
-    return <CustomToolBuilderWorkspace />;
+  if (renderWorkspace) {
+    return <>{renderWorkspace({ ...props, selectedCscPath, openCProjectScanner })}</>;
   }
 
   const tool = getToolById(activeTool);
