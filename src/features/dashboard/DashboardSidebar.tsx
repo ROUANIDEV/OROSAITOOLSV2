@@ -14,13 +14,13 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { usePublishedCustomToolRoutes } from "@/features/custom-tools/registry/usePublishedCustomToolRoutes";
 import type { ToolNavigationProps } from "@/features/dashboard/dashboardTypes";
 import {
   getMainTools,
   getSettingsTool,
 } from "@/features/dashboard/dashboardToolSelectors";
 import { DashboardSidebarToolItem } from "./DashboardSidebarToolItem";
+import { usePublishedCustomToolRoutes } from "../custom-tools/publishing";
 
 function SidebarBrand({
   onToolChange,
