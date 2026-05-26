@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import type { CallTreeWorkspaceState } from "@/features/call-tree/call-tree-state";
-import type { CProjectWorkspaceState } from "@/features/c-project/c-project-state";
+import type { CProjectWorkspaceState } from "@/features/c-project/state/cProjectWorkspaceState";
 import type { DataDictionaryWorkspaceState } from "@/features/data-dictionary/data-dictionary-state";
 import type { ToolId } from "@/features/dashboard/tool-config";
 

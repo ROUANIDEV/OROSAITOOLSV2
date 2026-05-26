@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import type { CustomToolBlock } from "../../../model/customToolTypes";
+import type { CustomToolBlock } from "../../../domain/customToolTypes";
 
 import { CustomToolBlockRow } from "../components/CustomToolBlockRow";
 

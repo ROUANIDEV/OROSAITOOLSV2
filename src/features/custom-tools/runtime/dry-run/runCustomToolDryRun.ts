@@ -1,7 +1,7 @@
 import type {
   CustomToolBlock,
   CustomToolManifest,
-} from "../../model/customToolTypes";
+} from "../../domain/customToolTypes";
 import { resolveVisualWorkflowOrder } from "../../workflow/resolveVisualWorkflowOrder";
 import {
   runFileReadBlock,
@@ -20,7 +20,7 @@ import type {
   TestInputValues,
   TestRunExecutionPlanItem,
   TestRunResult,
-} from "../model/testRunTypes";
+} from "../state/testRunTypes";
 
 export type RunCustomToolDryRunOptions = {
   executePython?: boolean;

@@ -2,9 +2,9 @@ import type {
   CustomToolBlock,
   CustomToolManifest,
   CustomToolWorkflowConnection,
-} from "../../model/customToolTypes";
+} from "../../domain/customToolTypes";
 
-export type { WorkflowConnectionStyle } from "../../model/customToolTypes";
+export type { WorkflowConnectionStyle } from "../../domain/customToolTypes";
 
 export type WorkflowConnection = CustomToolWorkflowConnection;
 

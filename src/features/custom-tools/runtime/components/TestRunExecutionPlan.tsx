@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { TestRunExecutionPlanItem } from "../model/testRunTypes";
+import type { TestRunExecutionPlanItem } from "../state/testRunTypes";
 
 type TestRunExecutionPlanProps = {
   plan: TestRunExecutionPlanItem[];

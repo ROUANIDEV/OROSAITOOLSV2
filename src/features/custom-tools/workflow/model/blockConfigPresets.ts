@@ -1,4 +1,4 @@
-import type { CustomToolBlockType } from "../../model/customToolTypes";
+import type { CustomToolBlockType } from "../../domain/customToolTypes";
 
 const pythonStarterCode = [
   "import json",

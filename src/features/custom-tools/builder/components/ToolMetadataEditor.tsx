@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-import type { CustomToolManifest } from "../../model/customToolTypes";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
 
 type ToolMetadataEditorProps = {
   draft: CustomToolManifest;

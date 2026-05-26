@@ -24,11 +24,11 @@ import {
   type DraftSaveStatus,
 } from "../hooks/usePersistedCustomToolDraft";
 
-import { CustomToolInputsEditor } from "../../inputs/components/CustomToolInputsEditor";
-import { markCustomToolDraftEdited } from "../../model/customToolDraftLifecycle";
-import type { CustomToolManifest } from "../../model/customToolTypes";
-import { CustomToolPermissionsEditor } from "../../permissions/components/CustomToolPermissionsEditor";
-import { CustomToolPublishPanel } from "../../publishing/components/CustomToolPublishPanel";
+import { CustomToolInputsEditor } from "./inputs/components/CustomToolInputsEditor";
+import { markCustomToolDraftEdited } from "../../domain/customToolDraftLifecycle";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
+import { CustomToolPermissionsEditor } from "./permissions/components/CustomToolPermissionsEditor";
+import { CustomToolPublishPanel } from "../../registry/publishing/components/CustomToolPublishPanel";
 
 import {
   CustomToolTestPanel,
@@ -40,7 +40,7 @@ import {
   createHistoryUpdaterTemplate,
 } from "../../runtime/templates/historyUpdaterTemplate";
 
-import { CustomToolValidationPanel } from "../../validation/components/CustomToolValidationPanel";
+import { CustomToolValidationPanel } from "./validation/CustomToolValidationPanel";
 
 function combineSaveStatuses(
   draftSaveStatus: DraftSaveStatus,

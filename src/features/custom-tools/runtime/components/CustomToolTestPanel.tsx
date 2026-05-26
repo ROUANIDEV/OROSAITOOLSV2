@@ -12,10 +12,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { markCustomToolDraftTested } from "../../model/customToolDraftLifecycle";
-import type { CustomToolManifest } from "../../model/customToolTypes";
-import { validateCustomToolDraft } from "../../validation/rules/customToolValidation";
-import { createInitialTestValues } from "../model/createInitialTestValues";
+import { markCustomToolDraftTested } from "../../domain/customToolDraftLifecycle";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
+import { validateCustomToolDraft } from "../../domain/validation/rules/customToolValidation";
+import { createInitialTestValues } from "../state/createInitialTestValues";
 import { createTestRunLog } from "../dry-run/dryRunLogs";
 import { runCustomToolDryRun } from "../dry-run/runCustomToolDryRun";
 import { TestRunAppendPreviews } from "./TestRunAppendPreviews";
@@ -29,7 +29,7 @@ import type {
   TestRunAppendPreview,
   TestRunExecutionPlanItem,
   TestRunLog,
-} from "../model/testRunTypes";
+} from "../state/testRunTypes";
 
 export type CustomToolTestPanelSession = {
   values: TestInputValues;

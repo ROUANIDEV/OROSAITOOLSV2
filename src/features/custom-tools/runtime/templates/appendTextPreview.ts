@@ -1,5 +1,5 @@
-import type { CustomToolBlock } from "../../model/customToolTypes";
-import type { TestRunAppendPreview } from "../model/testRunTypes";
+import type { CustomToolBlock } from "../../domain/customToolTypes";
+import type { TestRunAppendPreview } from "../state/testRunTypes";
 
 type CreateAppendTextPreviewArgs = {
   block: CustomToolBlock;

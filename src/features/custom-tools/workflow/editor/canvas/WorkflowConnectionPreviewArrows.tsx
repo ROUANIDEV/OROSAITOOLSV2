@@ -1,4 +1,4 @@
-import type { CustomToolBlock } from "../../../model/customToolTypes";
+import type { CustomToolBlock } from "../../../domain/customToolTypes";
 
 import {
   getInputPortAnchor,

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import type {
   CustomToolBlock,
   CustomToolBlockType,
-} from "../../../model/customToolTypes";
+} from "../../../domain/customToolTypes";
 
 import { defaultBlockConfigByType } from "../../model/blockConfigPresets";
 import { blockTypeOptions, getBlockTypeLabel } from "../../model/blockTypeOptions";

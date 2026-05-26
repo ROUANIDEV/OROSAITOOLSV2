@@ -11,7 +11,7 @@ import {
   normalizeCProjectWorkspaceState,
   prepareCProjectWorkspaceStateForStorage,
   type CProjectWorkspaceState,
-} from "@/features/c-project/c-project-state";
+} from "@/features/c-project/state/cProjectWorkspaceState";
 import {
   DATA_DICTIONARY_WORKSPACE_STORAGE_KEY,
   emptyDataDictionaryWorkspaceState,

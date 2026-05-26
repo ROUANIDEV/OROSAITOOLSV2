@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-import type { CustomToolBlockType } from "../../../model/customToolTypes";
+import type { CustomToolBlockType } from "../../../domain/customToolTypes";
 import type { WorkflowCanvasViewport } from "../../graph/workflowCanvasViewport";
 
 import type {

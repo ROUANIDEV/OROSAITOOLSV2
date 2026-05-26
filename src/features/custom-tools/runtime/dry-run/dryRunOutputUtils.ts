@@ -1,4 +1,4 @@
-import type { TestInputValues } from "../model/testRunTypes";
+import type { TestInputValues } from "../state/testRunTypes";
 
 export type FileListDryRunOutput = {
   kind: "fileList";

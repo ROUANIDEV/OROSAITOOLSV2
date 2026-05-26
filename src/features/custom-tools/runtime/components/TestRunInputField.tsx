@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-import { selectCustomToolPath } from "../../files/picker/selectCustomToolPath";
-import type { CustomToolInput } from "../../model/customToolTypes";
-import type { TestInputValues } from "../model/testRunTypes";
+import { selectCustomToolPath } from "../files/picker/selectCustomToolPath";
+import type { CustomToolInput } from "../../domain/customToolTypes";
+import type { TestInputValues } from "../state/testRunTypes";
 
 type TestRunInputFieldProps = {
   input: CustomToolInput;

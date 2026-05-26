@@ -2,7 +2,7 @@ import { GripVertical, Link, Maximize2, Settings2, Trash2 } from "lucide-react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CustomToolBlock, CustomToolInput } from "@/features/custom-tools/model/customToolTypes";
+import { CustomToolBlock, CustomToolInput } from "@/features/custom-tools/domain/customToolTypes";
 import { clampNumber, WorkflowBlockLayout } from "../../graph";
 import { getBlockInputDetails, getBlockOutputPreview, getBlockPorts, WorkflowPortTarget } from "../../model";
 
