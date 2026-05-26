@@ -1,7 +1,7 @@
 import type {
   CustomToolBlock,
   CustomToolBlockType,
-} from "../../model/customToolTypes";
+} from "../../domain/customToolTypes";
 import { defaultBlockConfigByType } from "./blockConfigPresets";
 import { getBlockTypeLabel } from "./blockTypeOptions";
 

@@ -1,4 +1,4 @@
-import type { TestRunAppendPreview } from "../model/testRunTypes";
+import type { TestRunAppendPreview } from "../state/testRunTypes";
 
 type TestRunAppendPreviewsProps = {
   previews: TestRunAppendPreview[];

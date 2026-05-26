@@ -20,7 +20,7 @@ import {
   getSettingsTool,
 } from "@/features/dashboard/dashboardToolSelectors";
 import { DashboardSidebarToolItem } from "./DashboardSidebarToolItem";
-import { usePublishedCustomToolRoutes } from "../custom-tools/publishing";
+import { usePublishedCustomToolRoutes } from "../custom-tools/registry/publishing";
 
 function SidebarBrand({
   onToolChange,

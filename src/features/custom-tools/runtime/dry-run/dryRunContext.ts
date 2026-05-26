@@ -1,9 +1,9 @@
-import type { CustomToolBlock } from "../../model/customToolTypes";
+import type { CustomToolBlock } from "../../domain/customToolTypes";
 import type {
   TestInputValues,
   TestRunAppendPreview,
   TestRunLog,
-} from "../model/testRunTypes";
+} from "../state/testRunTypes";
 
 export type DryRunContext = {
   values: TestInputValues;

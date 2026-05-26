@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { CustomToolBlock } from "../../model/customToolTypes";
+import type { CustomToolBlock } from "../../domain/customToolTypes";
 
 type TestRunBlockOutputsProps = {
   outputs: Record<string, unknown>;

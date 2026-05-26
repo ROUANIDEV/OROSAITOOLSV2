@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
-import type { CustomToolManifest } from "../../model/customToolTypes";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
 import {
   deleteCurrentCustomToolDraft,
   loadCurrentCustomToolDraft,
   saveCurrentCustomToolDraft,
-} from "../../persistence/customToolDraftStorage";
+} from "../state/customToolDraftStorage";
 
 export type DraftSaveStatus = "loading" | "idle" | "saving" | "saved" | "error";
 

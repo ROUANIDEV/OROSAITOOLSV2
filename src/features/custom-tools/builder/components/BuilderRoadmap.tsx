@@ -6,7 +6,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { builderPhases } from "../model/builderData";
+import { builderPhases } from "../state/builderData";
 
 export function BuilderRoadmap() {
   return (

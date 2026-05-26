@@ -1,4 +1,4 @@
-import type { TestRunLog } from "../model/testRunTypes";
+import type { TestRunLog } from "../state/testRunTypes";
 
 export function createTestRunLog(
   level: TestRunLog["level"],

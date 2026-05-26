@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import type {
   CustomToolBlock,
   CustomToolInput,
-} from "../../../model/customToolTypes";
+} from "../../../domain/customToolTypes";
 import {
   getInputPortHitTargets,
   type WorkflowPortTarget,

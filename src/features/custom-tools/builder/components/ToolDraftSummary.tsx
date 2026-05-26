@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import type { CustomToolManifest } from "../../model/customToolTypes";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
 
 type ToolDraftSummaryProps = {
   draft: CustomToolManifest;

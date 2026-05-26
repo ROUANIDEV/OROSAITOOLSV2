@@ -4,7 +4,7 @@ import type {
   CustomToolBlock,
   CustomToolManifest,
   CustomToolWorkflowConnection,
-} from "../../model/customToolTypes";
+} from "../../domain/customToolTypes";
 
 type VisualConnectionLike = Partial<CustomToolWorkflowConnection>;
 

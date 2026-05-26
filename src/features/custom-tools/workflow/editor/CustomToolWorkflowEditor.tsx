@@ -12,7 +12,7 @@ import type {
   CustomToolBlock,
   CustomToolBlockType,
   CustomToolManifest,
-} from "../../model/customToolTypes";
+} from "../../domain/customToolTypes";
 
 import { BuiltInBlockPalette } from "./components/BuiltInBlockPalette";
 import { createCustomToolBlock } from "../model/createCustomToolBlock";

@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { starterBlocks } from "../model/builderData";
+import { starterBlocks } from "../state/builderData";
 
 export function StarterBlockCatalog() {
   return (

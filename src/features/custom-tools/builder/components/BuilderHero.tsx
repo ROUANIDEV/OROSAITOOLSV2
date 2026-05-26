@@ -2,7 +2,7 @@ import { PlusCircle, Workflow } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { historyTemplateAction, safetyCards } from "../model/builderData";
+import { historyTemplateAction, safetyCards } from "../state/builderData";
 
 type BuilderHeroProps = {
   onCreateDraft: () => void;

@@ -14,7 +14,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import type { CustomToolBlockType } from "../../../model/customToolTypes";
+import type { CustomToolBlockType } from "../../../domain/customToolTypes";
 
 import { blockTypeOptions } from "../../model/blockTypeOptions";
 

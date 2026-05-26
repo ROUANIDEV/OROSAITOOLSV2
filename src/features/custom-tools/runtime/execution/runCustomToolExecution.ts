@@ -1,4 +1,4 @@
-import type { CustomToolManifest } from "../../model/customToolTypes";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
 import { createTestRunLog } from "../dry-run/dryRunLogs";
 import { runCustomToolDryRun } from "../dry-run/runCustomToolDryRun";
 import type {
@@ -6,7 +6,7 @@ import type {
   TestRunAppendPreview,
   TestRunExecutionPlanItem,
   TestRunLog,
-} from "../model/testRunTypes";
+} from "../state/testRunTypes";
 import { appendCustomToolText } from "./appendCustomToolText";
 
 const REQUIRED_CONFIRMATION = "APPEND";

@@ -1,4 +1,4 @@
-import type { CustomToolBlock } from "../../model/customToolTypes";
+import type { CustomToolBlock } from "../../domain/customToolTypes";
 import { runCustomToolPython } from "../execution/runCustomToolPython";
 import type { DryRunContext } from "./dryRunContext";
 import { getTextConfig } from "./dryRunContext";

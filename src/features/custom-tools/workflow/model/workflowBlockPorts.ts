@@ -1,4 +1,4 @@
-import type { CustomToolBlock } from "../../model/customToolTypes";
+import type { CustomToolBlock } from "../../domain/customToolTypes";
 import type { WorkflowBlockLayout } from "../graph/workflowCanvasLayout";
 
 export type WorkflowInputPortSide = "left" | "top" | "bottom";

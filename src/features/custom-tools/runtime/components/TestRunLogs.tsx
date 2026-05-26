@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 
-import type { TestRunLog } from "../model/testRunTypes";
+import type { TestRunLog } from "../state/testRunTypes";
 
 type TestRunLogsProps = {
   logs: TestRunLog[];

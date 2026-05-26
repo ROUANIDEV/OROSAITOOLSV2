@@ -11,9 +11,9 @@ import { ToolPlaceholder } from "@/features/dashboard/pages/ToolPlaceholder";
 import type { BuiltInToolId } from "@/features/dashboard/tool-config";
 import { ReportsWorkspace } from "@/features/reports/ReportsWorkspace";
 import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
-import { isCustomToolRouteId } from "../custom-tools/publishing";
+import { isCustomToolRouteId } from "../custom-tools/registry/publishing";
 import { CustomToolBuilderWorkspace } from "../custom-tools/builder";
-import { CustomToolRunnerWorkspace } from "../custom-tools/runner";
+import { CustomToolRunnerWorkspace } from "../custom-tools/runtime/runner";
 
 type WorkspaceRenderContext = DashboardContentProps & {
   selectedCscPath: DashboardContentProps["cProjectState"]["selectedCscPath"];

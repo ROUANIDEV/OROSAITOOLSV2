@@ -1,7 +1,7 @@
 import type {
   CustomToolBlock,
   CustomToolInput,
-} from "../../../model/customToolTypes";
+} from "../../../domain/customToolTypes";
 
 import {
   getBlockInputDetails,

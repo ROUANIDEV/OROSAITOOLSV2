@@ -1,4 +1,4 @@
-import type { CustomToolManifest } from "../../model/customToolTypes";
+import type { CustomToolManifest } from "../../domain/customToolTypes";
 
 function createDraftId(prefix: string) {
   return `${prefix}-${Date.now()}`;
