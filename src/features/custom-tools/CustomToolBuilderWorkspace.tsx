@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import {
   CustomToolWorkflowEditor,
   type CustomToolWorkflowEditorSession,
-} from "./blockEditor/CustomToolWorkflowEditor";
+} from "./workflow/editor/CustomToolWorkflowEditor";
 
 import { BuilderHero } from "./BuilderHero";
 import { BuilderRoadmap } from "./BuilderRoadmap";

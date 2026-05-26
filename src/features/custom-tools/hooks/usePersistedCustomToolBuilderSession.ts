@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
 import type { BuilderWorkspaceStage } from "../BuilderWorkspaceTabs";
-import { DEFAULT_WORKFLOW_CANVAS_VIEWPORT } from "../blockEditor/workflowCanvasViewport";
 
-import type { CustomToolWorkflowEditorSession } from "../blockEditor/CustomToolWorkflowEditor";
+
+import type { CustomToolWorkflowEditorSession } from "../workflow/editor/CustomToolWorkflowEditor";
 import type { CustomToolTestPanelSession } from "../testRun/CustomToolTestPanel";
 import type { TestInputValues } from "../testRun/testRunTypes";
 
@@ -14,6 +14,7 @@ import {
 } from "../storage/customToolBuilderSessionStorage";
 
 import type { DraftSaveStatus } from "./usePersistedCustomToolDraft";
+import { DEFAULT_WORKFLOW_CANVAS_VIEWPORT } from "../workflow/graph/workflowCanvasViewport";
 
 const SESSION_SAVE_DEBOUNCE_MS = 500;
 const MAX_PERSISTED_WORKFLOW_HISTORY = 25;

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { tauriCommandNames } from "@/api/tauri/tauriCommandNames";
 
 import type { BuilderWorkspaceStage } from "../BuilderWorkspaceTabs";
-import type { CustomToolWorkflowEditorSession } from "../blockEditor/CustomToolWorkflowEditor";
+import type { CustomToolWorkflowEditorSession } from "../workflow/editor/CustomToolWorkflowEditor";
 import type { CustomToolTestPanelSession } from "../testRun/CustomToolTestPanel";
 
 const CURRENT_BUILDER_SESSION_KEY = "custom_tools.builder_session";
