@@ -1,11 +1,5 @@
 import { AnalysisLoadingSkeleton } from "@/components/analysis/AnalysisLoadingSkeleton";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AnalysisResultCard } from "@/components/analysis/AnalysisResultCard";
 import { CallTreeGraph } from "@/features/call-tree/CallTreeGraph";
 import {
   CallTreeCallsTable,
@@ -28,12 +22,7 @@ export function CallTreeResultsSection({
   calls,
 }: CallTreeResultsSectionProps) {
   if (isAnalyzing) {
-    return (
-      <AnalysisLoadingSkeleton
-        title="Analyzing Call Tree..."
-        description="Detecting functions, callers, callees, and call relationships."
-      />
-    );
+    return <AnalysisLoadingSkeleton />;
   }
 
   if (!state.analysis) {
@@ -41,38 +30,19 @@ export function CallTreeResultsSection({
   }
 
   return (
-    <section className="grid gap-4">
-      <CallTreeGraph
-        analysis={state.analysis}
-        functions={functions}
-        calls={calls}
-      />
+    <div className="space-y-6">
+      <CallTreeGraph analysis={state.analysis} functions={functions} calls={calls} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Functions</CardTitle>
-          <CardDescription>
-            Search all columns or filter each column. Default view shows 20 rows.
-          </CardDescription>
-        </CardHeader>
+      <AnalysisResultCard title="Functions">
+        <CallTreeFunctionsTable functions={functions} />
+      </AnalysisResultCard>
 
-        <CardContent>
-          <CallTreeFunctionsTable functions={functions} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Calls</CardTitle>
-          <CardDescription>
-            Caller-to-callee relationships with pagination and per-column search.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          <CallTreeCallsTable calls={calls} />
-        </CardContent>
-      </Card>
-    </section>
+      <AnalysisResultCard
+        title="Calls"
+        description="Caller-to-callee relationships with pagination and per-column search."
+      >
+        <CallTreeCallsTable calls={calls} />
+      </AnalysisResultCard>
+    </div>
   );
 }

@@ -1,8 +1,11 @@
-import { Badge } from "@/components/ui/badge";
 import {
   SmartDataTable,
   type SmartDataTableColumn,
 } from "@/components/smart-table/SmartDataTable";
+import {
+  createSmartBadgeColumn,
+  createSmartTextColumn,
+} from "@/components/smart-table/smartTableColumns";
 import {
   getCalledByCount,
   getCallsCount,
@@ -21,50 +24,40 @@ export function CallTreeFunctionsTable({
   functions: CallTreeFunction[];
 }) {
   const columns: SmartDataTableColumn<CallTreeFunction>[] = [
-    {
+    createSmartTextColumn({
       id: "name",
       header: "Function",
-      accessor: (row) => (
-        <span className="font-medium">{getFunctionName(row)}</span>
-      ),
-      searchValue: (row) => getFunctionName(row),
-    },
-    {
+      value: getFunctionName,
+      emphasized: true,
+    }),
+    createSmartTextColumn({
       id: "file",
       header: "File",
-      accessor: (row) => getFile(row),
-      searchValue: (row) => getFile(row),
+      value: getFile,
       className: "max-w-[360px] truncate",
-    },
-    {
+    }),
+    createSmartTextColumn({
       id: "line",
       header: "Line",
-      accessor: (row) => getLine(row),
-      searchValue: (row) => String(getLine(row)),
-    },
-    {
+      value: getLine,
+    }),
+    createSmartTextColumn({
       id: "calls",
       header: "Calls",
-      accessor: (row) => getCallsCount(row),
-      searchValue: (row) => String(getCallsCount(row)),
-    },
-    {
+      value: getCallsCount,
+    }),
+    createSmartTextColumn({
       id: "calledBy",
       header: "Called By",
-      accessor: (row) => getCalledByCount(row),
-      searchValue: (row) => String(getCalledByCount(row)),
-    },
-    {
+      value: getCalledByCount,
+    }),
+    createSmartBadgeColumn({
       id: "root",
       header: "Root",
-      accessor: (row) => (
-        <Badge variant={getIsRoot(row) ? "secondary" : "outline"}>
-          {getIsRoot(row) ? "Yes" : "No"}
-        </Badge>
-      ),
-      searchValue: (row) => (getIsRoot(row) ? "yes root" : "no"),
-      filterValue: (row) => (getIsRoot(row) ? "Yes" : "No"),
-    },
+      isActive: getIsRoot,
+      activeSearchValue: "yes root",
+      inactiveSearchValue: "no",
+    }),
   ];
 
   return (
