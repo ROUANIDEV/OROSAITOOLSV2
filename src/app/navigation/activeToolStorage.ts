@@ -1,8 +1,5 @@
-import {
-  DEFAULT_TOOL_ID,
-} from "@/features/dashboard/dashboardToolSelectors";
-import { isToolId, type ToolId } from "@/features/dashboard/tool-config";
-import { loadAppSettings } from "@/features/settings/settings-state";
+import { DEFAULT_TOOL_ID, isToolId, ToolId } from "@/features/dashboard";
+import { loadAppSettings } from "@/features/settings";
 
 const ACTIVE_TOOL_STORAGE_KEY = "orosaitools.activeTool.v1";
 

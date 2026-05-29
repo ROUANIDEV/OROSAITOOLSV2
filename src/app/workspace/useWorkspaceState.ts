@@ -6,14 +6,13 @@ import {
   type SetStateAction,
 } from "react";
 
-import { WORKSPACE_DATA_CLEARED_EVENT } from "@/features/settings/settings-state";
-
 import {
   emptyWorkspaceState,
   loadWorkspaceStateFromDisk,
   usePersistWorkspaceStateToDisk,
   type WorkspaceState,
 } from "@/app/workspace/workspacePersistence";
+import { WORKSPACE_DATA_CLEARED_EVENT } from "@/features/settings";
 
 type UseWorkspaceStateArgs = {
   onWorkspaceCleared?: () => void;

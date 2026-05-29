@@ -8,11 +8,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { ToolId } from "@/features/dashboard/tool-config";
 import { ReportStatCard } from "@/features/reports/components/cards/ReportStatCard";
 import { ReportsOverviewActions } from "@/features/reports/components/cards/ReportsOverviewActions";
 import { ReportsOverviewStatus } from "@/features/reports/components/cards/ReportsOverviewStatus";
-import type { ReportsFolderStatus } from "@/features/reports/types/reportsTypes";
+import { ReportsFolderStatus } from "../../model";
+import { ToolId } from "@/features/dashboard";
 
 type ReportsOverviewCardProps = {
   selectedCscPath: string | null;

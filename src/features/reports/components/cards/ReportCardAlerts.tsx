@@ -1,10 +1,7 @@
 import { AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type {
-  OpenStatus,
-  ReportDetails,
-} from "@/features/reports/types/reportsTypes";
+import { OpenStatus, ReportDetails } from "../../model";
 
 type ReportCardAlertsProps = {
   report: ReportDetails;

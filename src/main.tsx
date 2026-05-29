@@ -4,7 +4,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { notifyFrontendReady } from "./lib/startup";
-import { ThemeProvider } from "./features/theme/theme-provider";
+import { ThemeProvider } from "./features/theme/provider/theme-provider";
 
 function StartupReadySignal() {
   useEffect(() => {

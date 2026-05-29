@@ -10,8 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { ReportFilterOption } from "@/features/reports/utils/reportsFilters";
-import type { ReportFilter } from "@/features/reports/types/reportsTypes";
+import { ReportFilter, ReportFilterOption } from "../../model";
 
 type ReportsFiltersCardProps = {
   searchQuery: string;

@@ -1,7 +1,7 @@
 import { AlertCircle, Network } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { ReportsFolderStatus } from "@/features/reports/types/reportsTypes";
+import { ReportsFolderStatus } from "../../model";
 
 type ReportsOverviewStatusProps = {
   selectedCscPath: string | null;

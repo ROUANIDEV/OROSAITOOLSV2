@@ -1,24 +1,12 @@
 import {
-  CALL_TREE_WORKSPACE_STORAGE_KEY,
-  emptyCallTreeWorkspaceState,
-  normalizeCallTreeWorkspaceState,
-  prepareCallTreeWorkspaceStateForStorage,
-  type CallTreeWorkspaceState,
-} from "@/features/call-tree/call-tree-state";
-import {
   C_PROJECT_WORKSPACE_STORAGE_KEY,
   emptyCProjectWorkspaceState,
   normalizeCProjectWorkspaceState,
   prepareCProjectWorkspaceStateForStorage,
   type CProjectWorkspaceState,
 } from "@/features/c-project/state/cProjectWorkspaceState";
-import {
-  DATA_DICTIONARY_WORKSPACE_STORAGE_KEY,
-  emptyDataDictionaryWorkspaceState,
-  normalizeDataDictionaryWorkspaceState,
-  prepareDataDictionaryWorkspaceStateForStorage,
-  type DataDictionaryWorkspaceState,
-} from "@/features/data-dictionary/data-dictionary-state";
+import { CALL_TREE_WORKSPACE_STORAGE_KEY, CallTreeWorkspaceState, emptyCallTreeWorkspaceState, normalizeCallTreeWorkspaceState, prepareCallTreeWorkspaceStateForStorage } from "@/features/call-tree";
+import { DATA_DICTIONARY_WORKSPACE_STORAGE_KEY, DataDictionaryWorkspaceState, emptyDataDictionaryWorkspaceState, normalizeDataDictionaryWorkspaceState, prepareDataDictionaryWorkspaceStateForStorage } from "@/features/data-dictionary";
 import {
   loadNativePersistedState,
   useDebouncedNativePersistedStateSave,

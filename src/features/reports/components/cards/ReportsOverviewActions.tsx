@@ -1,8 +1,8 @@
 import { FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { ToolId } from "@/features/dashboard/tool-config";
-import type { ReportsFolderStatus } from "@/features/reports/types/reportsTypes";
+import { ReportsFolderStatus } from "../../model";
+import { ToolId } from "@/features/dashboard";
 
 type ReportsOverviewActionsProps = {
   selectedCscPath: string | null;
