@@ -13,26 +13,28 @@ import type {
   CustomToolBlockType,
   CustomToolManifest,
 } from "../../domain/customToolTypes";
-
-import { BuiltInBlockPalette } from "./components/BuiltInBlockPalette";
 import { createCustomToolBlock } from "../model/createCustomToolBlock";
-import { WorkflowBlockSettingsDialog } from "./dialogs/WorkflowBlockSettingsDialog";
 import { WorkflowCanvas } from "./canvas/WorkflowCanvas";
+import { WorkflowDragGhost } from "./canvas/WorkflowDragGhost";
+import { BuiltInBlockPalette } from "./components/BuiltInBlockPalette";
+import { FoundationWorkflowRunButton } from "./components/FoundationWorkflowRunButton";
+import {
+  applyFoundationArrowInputToBlocks,
+  createFoundationArrowInputSuggestions,
+  removeFoundationArrowInputFromBlocks,
+} from "../../runtime/foundationWorkflowRuntime";
 import { WorkflowDeleteBlockDialog } from "./dialogs/WorkflowDeleteBlockDialog";
 import { WorkflowDeleteSelectedBlocksDialog } from "./dialogs/WorkflowDeleteSelectedBlocksDialog";
-import { WorkflowDragGhost } from "./canvas/WorkflowDragGhost";
-
+import { WorkflowBlockSettingsDialog } from "./dialogs/WorkflowBlockSettingsDialog";
 import {
   getBlockLayout,
   withBlockLayout,
   type WorkflowBlockLayout,
 } from "../graph/workflowCanvasLayout";
-
 import {
   DEFAULT_WORKFLOW_CANVAS_VIEWPORT,
   type WorkflowCanvasViewport,
 } from "../graph/workflowCanvasViewport";
-
 import {
   addWorkflowConnection,
   getWorkflowConnections,
@@ -43,7 +45,6 @@ import {
   type WorkflowConnectionStyle,
   type WorkflowWithVisualConnections,
 } from "../graph/workflowConnections";
-
 import { useWorkflowPointerDrag } from "./hooks/useWorkflowPointerDrag";
 
 type CustomToolWorkflowEditorProps = {
@@ -118,7 +119,6 @@ function moveBlock(blocks: CustomToolBlock[], from: number, to: number) {
 
   const nextBlocks = [...blocks];
   const [movedBlock] = nextBlocks.splice(from, 1);
-
   nextBlocks.splice(to, 0, movedBlock);
 
   return nextBlocks;
@@ -161,9 +161,7 @@ export function CustomToolWorkflowEditor({
       createDefaultWorkflowEditorSession(),
     );
 
-  const currentSession = normalizeWorkflowEditorSession(
-    session ?? localSession,
-  );
+  const currentSession = normalizeWorkflowEditorSession(session ?? localSession);
 
   const {
     paletteCollapsed,
@@ -178,7 +176,6 @@ export function CustomToolWorkflowEditor({
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [deleteBlockId, setDeleteBlockId] = useState<string | null>(null);
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
-
   const commitSession = (
     action: SetStateAction<CustomToolWorkflowEditorSession>,
   ) => {
@@ -229,6 +226,32 @@ export function CustomToolWorkflowEditor({
   const setSelectedConnectionId = (value: SetStateAction<string | null>) => {
     setSessionField("selectedConnectionId", value);
   };
+
+  useEffect(() => {
+    if (!selectedConnectionId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        setSelectedConnectionId(null);
+        return;
+      }
+
+      if (target.closest("[data-workflow-connection-hitbox='true']")) return;
+      if (target.closest("button, input, select, textarea, [role='button']")) {
+        return;
+      }
+
+      setSelectedConnectionId(null);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [selectedConnectionId]);
 
   const selectedBlockNames = blocks
     .filter((block) => selectedBlockIds.includes(block.id))
@@ -300,7 +323,6 @@ export function CustomToolWorkflowEditor({
 
     const selectedIds = new Set(selectedBlockIds);
     const nextBlocks = blocks.filter((block) => !selectedIds.has(block.id));
-
     const nextConnections = connections.filter((connection) => {
       return (
         !selectedIds.has(connection.fromBlockId) &&
@@ -311,7 +333,6 @@ export function CustomToolWorkflowEditor({
     commitWorkflow(
       withBlocksAndConnections(draft, nextBlocks, nextConnections).workflow,
     );
-
     setSelectedBlockId(null);
     setSelectedBlockIds([]);
     setSelectedConnectionId(null);
@@ -367,13 +388,7 @@ export function CustomToolWorkflowEditor({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [
-    deleteSelectedOpen,
-    draft,
-    futureWorkflows,
-    pastWorkflows,
-    selectedBlockIds,
-  ]);
+  }, [deleteSelectedOpen, draft, futureWorkflows, pastWorkflows, selectedBlockIds]);
 
   const addBlockAtPoint = (
     type: CustomToolBlockType,
@@ -388,7 +403,6 @@ export function CustomToolWorkflowEditor({
         y: point.y - 75,
       }),
     ]);
-
     setSelectedBlockIds([block.id]);
     setSelectedBlockId(block.id);
   };
@@ -400,7 +414,6 @@ export function CustomToolWorkflowEditor({
       ...blocks,
       withBlockLayout(block, getBlockLayout(block, blocks.length)),
     ]);
-
     setSelectedBlockIds([block.id]);
     setSelectedBlockId(block.id);
   };
@@ -418,7 +431,6 @@ export function CustomToolWorkflowEditor({
     const nextDraggedY = point.y - draggedLayout.height / 2;
     const deltaX = nextDraggedX - draggedLayout.x;
     const deltaY = nextDraggedY - draggedLayout.y;
-
     const selectedIds =
       selectedBlockIds.includes(block.id) && selectedBlockIds.length > 1
         ? new Set(selectedBlockIds)
@@ -453,21 +465,17 @@ export function CustomToolWorkflowEditor({
 
   const removeBlock = (blockId: string) => {
     const nextBlocks = blocks.filter((block) => block.id !== blockId);
-
     const nextConnections = connections.filter((connection) => {
       return (
-        connection.fromBlockId !== blockId &&
-        connection.toBlockId !== blockId
+        connection.fromBlockId !== blockId && connection.toBlockId !== blockId
       );
     });
 
     commitWorkflow(
       withBlocksAndConnections(draft, nextBlocks, nextConnections).workflow,
     );
-
     setDeleteBlockId(null);
     setSelectedConnectionId(null);
-
     setSelectedBlockIds((currentIds) =>
       currentIds.filter((currentId) => currentId !== blockId),
     );
@@ -491,13 +499,10 @@ export function CustomToolWorkflowEditor({
 
   const editingBlock =
     blocks.find((block) => block.id === editingBlockId) ?? null;
-
   const editingIndex = editingBlock
     ? blocks.findIndex((block) => block.id === editingBlock.id)
     : -1;
-
-  const deleteBlock =
-    blocks.find((block) => block.id === deleteBlockId) ?? null;
+  const deleteBlock = blocks.find((block) => block.id === deleteBlockId) ?? null;
 
   const changeConnectionStyle = (
     connectionId: string,
@@ -522,16 +527,44 @@ export function CustomToolWorkflowEditor({
     fromPortId?: string,
     toPortId?: string,
   ) => {
-    updateConnections(
-      addWorkflowConnection(
-        connections,
-        fromBlockId,
-        toBlockId,
-        fromPortId,
-        toPortId,
-      ),
+    const nextConnections = addWorkflowConnection(
+      connections,
+      fromBlockId,
+      toBlockId,
+      fromPortId,
+      toPortId,
+    );
+
+    commitWorkflow(
+      withBlocksAndConnections(draft, blocks, nextConnections).workflow,
     );
   };
+
+  const applyArrowInput = (connectionId: string) => {
+    const nextBlocks = applyFoundationArrowInputToBlocks(
+      blocks,
+      connections,
+      connectionId,
+    );
+
+    updateBlocks(nextBlocks);
+  };
+
+  const removeArrowInput = (connectionId: string) => {
+    const nextBlocks = removeFoundationArrowInputFromBlocks(
+      blocks,
+      connections,
+      connectionId,
+    );
+
+    updateBlocks(nextBlocks);
+  };
+
+  const editingLinkedInputSuggestions = editingBlock
+    ? createFoundationArrowInputSuggestions(blocks, connections).filter(
+        (suggestion) => suggestion.targetBlockId === editingBlock.id,
+      )
+    : [];
 
   const selectSingleBlock = (blockId: string) => {
     setSelectedBlockId(blockId);
@@ -553,6 +586,7 @@ export function CustomToolWorkflowEditor({
           Use an unbounded canvas with area selection, group movement, preview
           arrows, persistent undo/redo, and confirmed group deletion.
         </CardDescription>
+        <FoundationWorkflowRunButton blocks={blocks} connections={connections} />
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -586,7 +620,6 @@ export function CustomToolWorkflowEditor({
                   return connection.id !== connectionId;
                 }),
               );
-
               setSelectedConnectionId(null);
             }}
             onConnectionStyleChange={changeConnectionStyle}
@@ -619,6 +652,9 @@ export function CustomToolWorkflowEditor({
           canMoveUp={editingIndex > 0}
           canMoveDown={editingIndex >= 0 && editingIndex < blocks.length - 1}
           onClose={() => setEditingBlockId(null)}
+          linkedInputSuggestions={editingLinkedInputSuggestions}
+          onApplyLinkedInput={applyArrowInput}
+          onRemoveLinkedInput={removeArrowInput}
           onChange={(nextBlock) => {
             updateBlocks(
               blocks.map((block) =>

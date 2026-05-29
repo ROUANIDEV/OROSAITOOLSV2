@@ -3,4 +3,7 @@ export * from "./BuiltInBlockPalette";
 export * from "./CustomToolBlockRow";
 export * from "./FoundationBlockCatalog";
 export * from "./foundation-backend";
+export * from "./FoundationLinkedInputsPanel";
+export * from "./FoundationWorkflowRunButton";
+export * from "./FoundationWorkflowRunPanel";
 export * from "./PythonBlockConfigEditor";

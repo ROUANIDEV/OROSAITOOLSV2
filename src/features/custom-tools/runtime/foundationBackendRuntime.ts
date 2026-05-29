@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-
 import type { CustomToolBlock } from "../domain/customToolTypes";
 
 export type FoundationBackendDiagnosticSeverity = "error" | "warning" | "info";
@@ -69,7 +68,7 @@ function asRecord(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
 
-function asArray<T = unknown>(value: unknown): T[] {
+function asArray<T = RawRecord>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
@@ -148,6 +147,7 @@ function normalizeRunOptions(options: FoundationBackendRunOptions | undefined) {
     maxLoopIterations:
       options?.maxLoopIterations ?? options?.maxIterations ?? 1_000,
     failFast: options?.failFast ?? false,
+    dryRun: options?.dryRun ?? false,
   };
 }
 
@@ -177,9 +177,7 @@ export function createFoundationBackendPayload(
   const blocks = normalizeFoundationBlocks(request);
 
   if (blocks.length === 0) {
-    throw new Error(
-      "No foundation blocks were provided to the Rust preview command.",
-    );
+    throw new Error("No foundation blocks were provided to the Rust preview command.");
   }
 
   return {
@@ -193,8 +191,7 @@ export async function runFoundationBackendPreview(
   request: FoundationBackendRunRequest,
 ): Promise<FoundationBackendRunResult> {
   const payload = createFoundationBackendPayload(request);
-  const raw = await invoke<unknown>("custom_tool_foundation_run", { payload });
-
+  const raw = await invoke("custom_tool_foundation_run", { payload });
   return normalizeRawResult(raw);
 }
 
@@ -208,5 +205,11 @@ export async function runFoundationBlocksPreview(
 export async function runSingleFoundationBlockPreview(
   block: FoundationBackendBlockPayload,
 ): Promise<FoundationBackendRunResult> {
-  return runFoundationBackendPreview({ block });
+  return runFoundationBackendPreview({
+    block,
+    options: {
+      dryRun: true,
+      failFast: false,
+    },
+  });
 }

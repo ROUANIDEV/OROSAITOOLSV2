@@ -41,6 +41,7 @@ export const customToolFoundationBlockTypes = [
   "collection.dictionary",
   "collection.get",
   "collection.set",
+  "collection.sort",
 ] as const;
 
 export type CustomToolFoundationBlockType =

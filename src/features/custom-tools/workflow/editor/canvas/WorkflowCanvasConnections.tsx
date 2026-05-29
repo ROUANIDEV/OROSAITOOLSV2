@@ -1,5 +1,4 @@
 import type { CustomToolBlock } from "../../../domain/customToolTypes";
-
 import type { WorkflowBlockLayout } from "../../graph/workflowCanvasLayout";
 import type { WorkflowConnection } from "../../graph/workflowConnections";
 import type { WorkflowCanvasPoint } from "../../graph/workflowPointerDragTypes";
@@ -40,7 +39,6 @@ function createConnectionPath(
 
   if (end.side === "top") {
     const middleY = Math.min(start.y, end.y) - 140;
-
     return `M ${start.x} ${start.y} C ${start.x + 120} ${start.y}, ${
       end.x
     } ${middleY}, ${end.x} ${end.y}`;
@@ -126,7 +124,6 @@ export function WorkflowCanvasConnections({
           connection,
           connection.style === "curved",
         );
-
         const selected = selectedConnectionId === connection.id;
 
         return (
@@ -147,6 +144,7 @@ export function WorkflowCanvasConnections({
               d={path}
               className="cursor-pointer fill-none stroke-transparent"
               data-no-pan="true"
+              data-workflow-connection-hitbox="true"
               strokeWidth="18"
               style={{ pointerEvents: "stroke" }}
               onPointerDown={(event) => event.stopPropagation()}

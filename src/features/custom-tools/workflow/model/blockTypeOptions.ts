@@ -12,7 +12,12 @@ export type CustomToolBlockTypeOption = {
   category: string;
 };
 
-export const executableBlockTypeOptions: CustomToolBlockTypeOption[] = [
+export type CustomToolExecutableBlockTypeOption = CustomToolBlockTypeOption & {
+  value: CustomToolExecutableBlockType;
+  executionMode: "runtime";
+};
+
+export const executableBlockTypeOptions: CustomToolExecutableBlockTypeOption[] = [
   {
     value: "file.glob",
     label: "Find files",
@@ -76,11 +81,12 @@ export const foundationBlockTypeOptions: CustomToolBlockTypeOption[] =
 /**
  * Backward-compatible executable list.
  *
- * The palette uses this for blocks that are already connected to the current
- * runtime. Use customToolBlockTypeOptions when the UI should include both
- * executable blocks and model-only foundation blocks.
+ * Older palette components import `blockTypeOptions`; newer split palettes import
+ * `executableBlockTypeOptions`. Keep both names so existing local Step 1-16 files
+ * do not break during hotfixes.
  */
-export const blockTypeOptions = executableBlockTypeOptions;
+export const blockTypeOptions: CustomToolExecutableBlockTypeOption[] =
+  executableBlockTypeOptions;
 
 export const customToolBlockTypeOptions: CustomToolBlockTypeOption[] = [
   ...executableBlockTypeOptions,
@@ -103,9 +109,6 @@ export function getBlockTypeDescription(type: CustomToolBlockType) {
 
 export function isExecutableBlockOption(
   option: CustomToolBlockTypeOption,
-): option is CustomToolBlockTypeOption & {
-  value: CustomToolExecutableBlockType;
-  executionMode: "runtime";
-} {
+): option is CustomToolExecutableBlockTypeOption {
   return option.executionMode === "runtime";
 }
