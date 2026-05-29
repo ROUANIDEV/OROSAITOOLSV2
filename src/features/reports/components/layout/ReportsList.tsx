@@ -1,11 +1,7 @@
 import { Button } from "@/components/ui/button";
-import type { ToolId } from "@/features/dashboard/tool-config";
 import { ReportCard } from "@/features/reports/components/cards/ReportCard";
-import type {
-  CopyStatus,
-  OpenStatus,
-  ReportDetails,
-} from "@/features/reports/types/reportsTypes";
+import { CopyStatus, OpenStatus, ReportDetails } from "../../model";
+import { ToolId } from "@/features/dashboard";
 
 type ReportsListProps = {
   reports: ReportDetails[];

@@ -2,11 +2,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  dashboardStats,
-  tools,
-  type ToolId,
-} from "@/features/dashboard/tool-config";
+import { dashboardStats, ToolId, tools } from "../config";
 
 type DashboardOverviewProps = {
   onToolChange: (tool: ToolId) => void;

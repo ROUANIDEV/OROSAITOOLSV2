@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { getToolTitle } from "@/features/dashboard/dashboardToolSelectors";
-import type { ToolId } from "@/features/dashboard/tool-config";
-
 import {
   loadActiveTool,
   saveActiveTool,
 } from "@/app/navigation/activeToolStorage";
+import { getToolTitle, ToolId } from "@/features/dashboard";
 
 export function useActiveTool() {
   const [activeTool, setActiveTool] = useState<ToolId>(() =>

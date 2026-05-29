@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import { useActiveTool } from "@/app/navigation/useActiveTool";
 import { useAutoOpenReportsAfterExport } from "@/app/reports/useAutoOpenReportsAfterExport";
 import { useWorkspaceState } from "@/app/workspace/useWorkspaceState";
-import { AppDashboard } from "@/features/dashboard/AppDashboard";
+import { AppDashboard } from "@/features/dashboard";
 
 export default function App() {
   const { activeTool, setActiveTool } = useActiveTool();

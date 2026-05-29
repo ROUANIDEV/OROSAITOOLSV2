@@ -2,12 +2,8 @@ import { Check, Copy, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { ToolId } from "@/features/dashboard/tool-config";
-import type {
-  OpenStatus,
-  ReportDetails,
-} from "@/features/reports/types/reportsTypes";
-import { formatDateTime } from "@/features/reports/utils/reportsUtils";
+import { formatDateTime, OpenStatus, ReportDetails } from "../../model";
+import { ToolId } from "@/features/dashboard";
 
 type ReportCardActionsProps = {
   report: ReportDetails;

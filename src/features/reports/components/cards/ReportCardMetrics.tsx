@@ -1,4 +1,4 @@
-import type { ReportDetails } from "@/features/reports/types/reportsTypes";
+import { ReportDetails } from "../../model";
 
 type ReportCardMetricsProps = {
   report: ReportDetails;

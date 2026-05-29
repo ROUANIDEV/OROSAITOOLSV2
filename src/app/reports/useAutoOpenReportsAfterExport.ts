@@ -1,7 +1,6 @@
+import { ToolId } from "@/features/dashboard";
+import { loadAppSettings } from "@/features/settings";
 import { useEffect, useRef } from "react";
-
-import type { ToolId } from "@/features/dashboard/tool-config";
-import { loadAppSettings } from "@/features/settings/settings-state";
 
 type ExportTimestamp = string | null;
 

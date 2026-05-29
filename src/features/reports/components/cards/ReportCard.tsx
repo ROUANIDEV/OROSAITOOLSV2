@@ -1,15 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ToolId } from "@/features/dashboard/tool-config";
 import { ReportCardActions } from "@/features/reports/components/cards/ReportCardActions";
 import { ReportCardAlerts } from "@/features/reports/components/cards/ReportCardAlerts";
 import { ReportCardMetrics } from "@/features/reports/components/cards/ReportCardMetrics";
-import type {
-  CopyStatus,
-  OpenStatus,
-  ReportDetails,
-} from "@/features/reports/types/reportsTypes";
-import { getStatusBadgeVariant } from "@/features/reports/utils/reportsUtils";
+import { CopyStatus, getStatusBadgeVariant, OpenStatus, ReportDetails } from "../../model";
+import { ToolId } from "@/features/dashboard";
 
 type ReportCardProps = {
   report: ReportDetails;
