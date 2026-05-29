@@ -1,4 +1,11 @@
-import type { CustomToolBlock } from "../../domain/customToolTypes";
+import {
+  isFoundationCustomToolBlockType,
+  type CustomToolBlock,
+} from "../../domain/customToolTypes";
+import {
+  getFoundationBlockDefinition,
+  type FoundationBlockPort,
+} from "../foundation";
 import type { WorkflowBlockLayout } from "../graph/workflowCanvasLayout";
 
 export type WorkflowInputPortSide = "left" | "top" | "bottom";
@@ -36,7 +43,41 @@ function output(id: string, label: string): WorkflowOutputPort {
   return { id, label };
 }
 
+function formatFoundationPortLabel(port: FoundationBlockPort) {
+  return port.dataType ? `${port.label} (${port.dataType})` : port.label;
+}
+
+function getFoundationInputPortSide(
+  port: FoundationBlockPort,
+): WorkflowInputPortSide {
+  if (port.role === "control") return "top";
+  if (port.role === "scope") return "bottom";
+
+  return "left";
+}
+
+function getFoundationBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
+  if (!isFoundationCustomToolBlockType(block.type)) {
+    return { inputs: [], outputs: [] };
+  }
+
+  const definition = getFoundationBlockDefinition(block.type);
+
+  return {
+    inputs: definition.inputs.map((port) =>
+      input(port.id, formatFoundationPortLabel(port), getFoundationInputPortSide(port)),
+    ),
+    outputs: definition.outputs.map((port) =>
+      output(port.id, formatFoundationPortLabel(port)),
+    ),
+  };
+}
+
 export function getBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
+  if (isFoundationCustomToolBlockType(block.type)) {
+    return getFoundationBlockPorts(block);
+  }
+
   switch (block.type) {
     case "file.glob":
       return {
@@ -98,10 +139,7 @@ export function getBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
     case "safety.confirm":
       return {
         inputs: [input("preview", "Preview", "left")],
-        outputs: [
-          output("confirmed", "Confirmed"),
-          output("message", "Message"),
-        ],
+        outputs: [output("confirmed", "Confirmed"), output("message", "Message")],
       };
 
     default:

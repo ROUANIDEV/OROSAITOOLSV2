@@ -8,14 +8,49 @@ export type CustomToolInputType =
   | "number"
   | "boolean";
 
+export const customToolExecutableBlockTypes = [
+  "file.glob",
+  "file.read",
+  "file.appendText",
+  "text.template",
+  "safety.preview",
+  "safety.confirm",
+  "python.code",
+] as const;
+
+export type CustomToolExecutableBlockType =
+  (typeof customToolExecutableBlockTypes)[number];
+
+export const customToolFoundationBlockTypes = [
+  "variable.create",
+  "variable.assign",
+  "constant.create",
+  "expression.value",
+  "expression.template",
+  "scope.global",
+  "scope.local",
+  "function.define",
+  "function.call",
+  "control.if",
+  "control.switch",
+  "loop.for",
+  "loop.forEach",
+  "loop.while",
+  "collection.array",
+  "collection.list",
+  "collection.dictionary",
+  "collection.get",
+  "collection.set",
+] as const;
+
+export type CustomToolFoundationBlockType =
+  (typeof customToolFoundationBlockTypes)[number];
+
 export type CustomToolBlockType =
-  | "file.glob"
-  | "file.read"
-  | "file.appendText"
-  | "text.template"
-  | "safety.preview"
-  | "safety.confirm"
-  | "python.code";
+  | CustomToolExecutableBlockType
+  | CustomToolFoundationBlockType;
+
+export type CustomToolBlockExecutionMode = "runtime" | "model";
 
 export type WorkflowConnectionStyle = "solid" | "dashed" | "curved";
 
@@ -42,6 +77,7 @@ export type CustomToolBlock = {
   type: CustomToolBlockType;
   label: string;
   description: string;
+  executionMode?: CustomToolBlockExecutionMode;
   config: Record<string, unknown>;
 };
 
@@ -69,3 +105,21 @@ export type CustomToolManifest = {
   workflow: CustomToolWorkflow;
   permissions: CustomToolPermissionSet;
 };
+
+export function isExecutableCustomToolBlockType(
+  value: unknown,
+): value is CustomToolExecutableBlockType {
+  return (
+    typeof value === "string" &&
+    (customToolExecutableBlockTypes as readonly string[]).includes(value)
+  );
+}
+
+export function isFoundationCustomToolBlockType(
+  value: unknown,
+): value is CustomToolFoundationBlockType {
+  return (
+    typeof value === "string" &&
+    (customToolFoundationBlockTypes as readonly string[]).includes(value)
+  );
+}

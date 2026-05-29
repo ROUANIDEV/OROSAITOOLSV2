@@ -1,3 +1,4 @@
+export * from "./FoundationWorkflowCanvasNode";
 export * from "./WorkflowCanvas";
 export * from "./WorkflowCanvasConnections";
 export * from "./WorkflowCanvasNode";

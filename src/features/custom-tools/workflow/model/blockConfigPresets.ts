@@ -1,21 +1,30 @@
-import type { CustomToolBlockType } from "../../domain/customToolTypes";
+import {
+  isExecutableCustomToolBlockType,
+  isFoundationCustomToolBlockType,
+  type CustomToolBlockType,
+  type CustomToolExecutableBlockType,
+} from "../../domain/customToolTypes";
+import { getFoundationBlockDefinition } from "../foundation";
 
 const pythonStarterCode = [
   "import json",
   "import sys",
   "",
   "payload = json.load(sys.stdin)",
-  "inputs = payload.get(\"inputs\", {})",
+  'inputs = payload.get("inputs", {})',
   "",
   "print(json.dumps({",
-  " \"ok\": True,",
-  " \"inputKeys\": list(inputs.keys())",
+  '  "ok": True,',
+  '  "inputKeys": list(inputs.keys())',
   "}))",
 ].join("\n");
 
-export const defaultBlockConfigByType: Record<
-  CustomToolBlockType,
-  Record<string, unknown>
+function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+}
+
+export const defaultBlockConfigByType: Partial<
+  Record<CustomToolBlockType, Record<string, unknown>>
 > = {
   "file.glob": {
     rootInput: "",
@@ -40,16 +49,28 @@ export const defaultBlockConfigByType: Record<
   "safety.confirm": {
     message: "Confirm before applying changes.",
   },
-};
+} satisfies Partial<
+  Record<CustomToolExecutableBlockType, Record<string, unknown>>
+>;
 
 export const blockConfigPresets = defaultBlockConfigByType;
 
-export function getBlockConfigPreset(type: CustomToolBlockType) {
-  return {
-    ...(defaultBlockConfigByType[type] ?? {}),
-  };
+export function getBlockConfigPreset(
+  type: CustomToolBlockType,
+): Record<string, unknown> {
+  if (isFoundationCustomToolBlockType(type)) {
+    return cloneConfig(getFoundationBlockDefinition(type).defaultConfig);
+  }
+
+  if (isExecutableCustomToolBlockType(type)) {
+    return cloneConfig(defaultBlockConfigByType[type] ?? {});
+  }
+
+  return {};
 }
 
-export function createBlockConfigPreset(type: CustomToolBlockType) {
+export function createBlockConfigPreset(
+  type: CustomToolBlockType,
+): Record<string, unknown> {
   return getBlockConfigPreset(type);
 }
