@@ -19,6 +19,7 @@ pub fn run() {
             commands::custom_tools::custom_tool_scan_files,
             commands::custom_tools::custom_tool_append_text,
             commands::custom_tools::custom_tool_run_python,
+            commands::foundation_engine::custom_tool_foundation_run,
             commands::reports::reveal_path_in_file_manager,
             commands::storage::app_data_path,
             commands::storage::app_data_reveal,

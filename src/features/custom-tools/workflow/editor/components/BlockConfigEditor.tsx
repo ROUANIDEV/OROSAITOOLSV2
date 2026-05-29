@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-import type { CustomToolBlockType } from "../../../domain/customToolTypes";
-
+import {
+  isFoundationCustomToolBlockType,
+  type CustomToolBlockType,
+} from "../../../domain/customToolTypes";
+import { FoundationBackendContractPanel } from "./foundation-backend";
+import { FoundationBlockConfigEditor } from "./foundation-config";
 import { PythonBlockConfigEditor } from "./PythonBlockConfigEditor";
 
 type BlockConfigEditorProps = {
@@ -26,6 +29,42 @@ function parseConfig(value: string) {
   }
 
   return parsed as Record<string, unknown>;
+}
+
+function RawConfigEditor({
+  blockId,
+  configText,
+  error,
+  onTextChange,
+  onCommit,
+}: {
+  blockId: string;
+  configText: string;
+  error: string | null;
+  onTextChange: (value: string) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`${blockId}-config`}>Config JSON</Label>
+
+      <Textarea
+        id={`${blockId}-config`}
+        value={configText}
+        onChange={(event) => onTextChange(event.target.value)}
+        onBlur={onCommit}
+        className="min-h-40 font-mono text-xs"
+      />
+
+      {error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Edit the JSON, then click outside the field to save it.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function BlockConfigEditor({
@@ -63,25 +102,47 @@ export function BlockConfigEditor({
     );
   }
 
+  if (isFoundationCustomToolBlockType(blockType)) {
+    return (
+      <div className="space-y-4">
+        <FoundationBlockConfigEditor
+          blockId={blockId}
+          blockType={blockType}
+          config={config}
+          onConfigChange={onConfigChange}
+        />
+
+        <FoundationBackendContractPanel
+          blockId={blockId}
+          blockType={blockType}
+          config={config}
+        />
+
+        <details className="rounded-2xl border bg-card/70 p-4">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Advanced raw config
+          </summary>
+          <div className="mt-4">
+            <RawConfigEditor
+              blockId={blockId}
+              configText={configText}
+              error={error}
+              onTextChange={setConfigText}
+              onCommit={commitConfig}
+            />
+          </div>
+        </details>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-2">
-      <Label htmlFor={`${blockId}-config`}>Config JSON</Label>
-
-      <Textarea
-        id={`${blockId}-config`}
-        className="min-h-40 font-mono text-xs"
-        value={configText}
-        onBlur={commitConfig}
-        onChange={(event) => setConfigText(event.target.value)}
-      />
-
-      {error ? (
-        <p className="text-xs text-destructive">{error}</p>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Edit the JSON, then click outside the field to save it.
-        </p>
-      )}
-    </div>
+    <RawConfigEditor
+      blockId={blockId}
+      configText={configText}
+      error={error}
+      onTextChange={setConfigText}
+      onCommit={commitConfig}
+    />
   );
 }

@@ -1,16 +1,19 @@
-import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-import type {
-  CustomToolBlock,
-  CustomToolBlockType,
+import {
+  isFoundationCustomToolBlockType,
+  type CustomToolBlock,
+  type CustomToolBlockType,
 } from "../../../domain/customToolTypes";
-
-import { defaultBlockConfigByType } from "../../model/blockConfigPresets";
-import { blockTypeOptions, getBlockTypeLabel } from "../../model/blockTypeOptions";
+import { createBlockConfigPreset } from "../../model/blockConfigPresets";
+import {
+  customToolBlockTypeOptions,
+  getBlockTypeLabel,
+} from "../../model/blockTypeOptions";
 import { BlockConfigEditor } from "./BlockConfigEditor";
 
 type CustomToolBlockRowProps = {
@@ -24,6 +27,12 @@ type CustomToolBlockRowProps = {
   onRemove: () => void;
 };
 
+function getExecutionModeLabel(block: CustomToolBlock) {
+  if (block.executionMode) return block.executionMode;
+
+  return isFoundationCustomToolBlockType(block.type) ? "model" : "runtime";
+}
+
 export function CustomToolBlockRow({
   block,
   index,
@@ -32,97 +41,99 @@ export function CustomToolBlockRow({
   onChange,
   onMoveUp,
   onMoveDown,
-  onRemove,
 }: CustomToolBlockRowProps) {
+  const executionMode = getExecutionModeLabel(block);
+
   const updateType = (type: CustomToolBlockType) => {
     onChange({
       ...block,
       type,
       label: getBlockTypeLabel(type),
-      config: { ...defaultBlockConfigByType[type] },
+      executionMode: isFoundationCustomToolBlockType(type) ? "model" : "runtime",
+      config: createBlockConfigPreset(type),
     });
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">Block #{index + 1}</p>
+    <div className="space-y-4 rounded-xl border bg-background/70 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold">Block #{index + 1}</p>
+            <Badge
+              variant={executionMode === "model" ? "secondary" : "outline"}
+              className="text-[10px]"
+            >
+              {executionMode}
+            </Badge>
+          </div>
 
-          <p className="font-mono text-xs text-muted-foreground">
-            {block.type}
-          </p>
+          <p className="text-xs text-muted-foreground">{block.type}</p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            onClick={onMoveUp}
-            disabled={!canMoveUp}
-            aria-label="Move block up"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </Button>
+          <p className="hidden max-w-xs text-right text-xs text-muted-foreground sm:block">
+            Reorder sequence here. Delete from the canvas.
+          </p>
 
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            onClick={onMoveDown}
-            disabled={!canMoveDown}
-            aria-label="Move block down"
-          >
-            <ArrowDown className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1 rounded-lg border bg-background/70 p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              aria-label="Move block up"
+              title="Move block up"
+            >
+              <ArrowUp className="size-4" aria-hidden="true" />
+            </Button>
 
-          <Button
-            type="button"
-            size="icon"
-            variant="destructive"
-            onClick={onRemove}
-            aria-label="Remove block"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              aria-label="Move block down"
+              title="Move block down"
+            >
+              <ArrowDown className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-2 text-sm">
-          <span className="font-medium">Label</span>
-
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`${block.id}-label`}>Label</Label>
           <Input
+            id={`${block.id}-label`}
             value={block.label}
-            onChange={(event) =>
-              onChange({ ...block, label: event.target.value })
-            }
+            onChange={(event) => onChange({ ...block, label: event.target.value })}
           />
-        </label>
+        </div>
 
-        <label className="space-y-2 text-sm">
-          <span className="font-medium">Type</span>
-
+        <div className="space-y-2">
+          <Label htmlFor={`${block.id}-type`}>Type</Label>
           <select
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            id={`${block.id}-type`}
             value={block.type}
-            onChange={(event) =>
-              updateType(event.target.value as CustomToolBlockType)
-            }
+            onChange={(event) => updateType(event.target.value as CustomToolBlockType)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            {blockTypeOptions.map((option) => (
+            {customToolBlockTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
+                {option.executionMode === "model" ? " · model" : ""}
               </option>
             ))}
           </select>
-        </label>
+        </div>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor={`${block.id}-description`}>Description</Label>
-
         <Input
           id={`${block.id}-description`}
           value={block.description}

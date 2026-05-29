@@ -11,11 +11,14 @@ import type {
 } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  isFoundationCustomToolBlockType,
-  type CustomToolBlock,
-  type CustomToolInput,
+import type {
+  CustomToolBlock,
+  CustomToolInput,
 } from "@/features/custom-tools/domain/customToolTypes";
+import {
+  getFoundationCanvasNodePresentation,
+  validateFoundationBlock,
+} from "../../foundation";
 import { clampNumber, type WorkflowBlockLayout } from "../../graph";
 import {
   getBlockInputDetails,
@@ -23,9 +26,8 @@ import {
   getBlockPorts,
   type WorkflowPortTarget,
 } from "../../model";
-import { FoundationWorkflowCanvasNode } from "./FoundationWorkflowCanvasNode";
 
-type WorkflowCanvasNodeProps = {
+export type FoundationWorkflowCanvasNodeProps = {
   block: CustomToolBlock;
   index: number;
   inputs: CustomToolInput[];
@@ -55,43 +57,36 @@ function getEvenPosition(index: number, count: number) {
   return ((index + 1) / (count + 1)) * 100;
 }
 
-function getRuntimeToneClassName(type: string) {
-  if (type.startsWith("file.")) {
-    return {
-      shell: "border-blue-500/35 bg-card/95 shadow-blue-500/5",
-      badge: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
-      port: "border-blue-500 bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-200",
-      connector: "border-blue-500 bg-blue-500 text-white",
-    };
+function getShapeClassName(shape: ReturnType<typeof getFoundationCanvasNodePresentation>["shape"]) {
+  switch (shape) {
+    case "variable":
+      return "rounded-r-2xl rounded-l-md border-l-8";
+    case "constant":
+      return "rounded-2xl border-2 border-double";
+    case "expression":
+      return "rounded-2xl border-l-4";
+    case "scope":
+      return "rounded-xl border-dotted";
+    case "function":
+      return "rounded-2xl border-t-8";
+    case "call":
+      return "rounded-2xl border-b-8";
+    case "condition":
+      return "rounded-3xl border-dashed";
+    case "loop":
+      return "rounded-3xl border-dashed border-l-8";
+    case "collection":
+      return "rounded-xl border-l-8 border-r-4";
+    default:
+      return "rounded-2xl";
   }
-
-  if (type.startsWith("python.")) {
-    return {
-      shell: "border-yellow-500/35 bg-card/95 shadow-yellow-500/5",
-      badge: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
-      port: "border-yellow-500 bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-200",
-      connector: "border-yellow-500 bg-yellow-500 text-white",
-    };
-  }
-
-  if (type.startsWith("safety.")) {
-    return {
-      shell: "border-rose-500/35 bg-card/95 shadow-rose-500/5",
-      badge: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
-      port: "border-rose-500 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-200",
-      connector: "border-rose-500 bg-rose-500 text-white",
-    };
-  }
-
-  return {
-    shell: "border-border bg-card/95",
-    badge: "bg-muted text-muted-foreground",
-    port: "border-primary bg-primary/10 text-primary",
-    connector: "border-primary bg-primary text-primary-foreground",
-  };
 }
 
-function RuntimeWorkflowCanvasNode({
+function formatHiddenDetail(details: string[]) {
+  return details.filter(Boolean).slice(0, 2).join(" · ");
+}
+
+export function FoundationWorkflowCanvasNode({
   block,
   index,
   inputs,
@@ -107,11 +102,19 @@ function RuntimeWorkflowCanvasNode({
   onLayoutChange,
   onHoverChange,
   onHoverMove,
-}: WorkflowCanvasNodeProps) {
+}: FoundationWorkflowCanvasNodeProps) {
   const inputDetails = getBlockInputDetails(block, inputs);
   const outputPreview = getBlockOutputPreview(block);
   const ports = getBlockPorts(block);
-  const tone = getRuntimeToneClassName(block.type);
+  const presentation = getFoundationCanvasNodePresentation(block);
+  const validation = validateFoundationBlock(block);
+  const diagnosticCount = validation.diagnostics.length;
+  const errorCount = validation.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  ).length;
+  const warningCount = validation.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "warning",
+  ).length;
 
   const hideDetails = (event?: ReactPointerEvent) => {
     event?.stopPropagation();
@@ -171,7 +174,7 @@ function RuntimeWorkflowCanvasNode({
         key={port.id}
         className={[
           "absolute z-20 flex size-3.5 items-center justify-center rounded-full border-2 shadow-sm transition",
-          tone.port,
+          presentation.portClassName,
           active ? "scale-150 ring-4 ring-primary/20" : "",
         ].join(" ")}
         style={positionStyle}
@@ -195,9 +198,10 @@ function RuntimeWorkflowCanvasNode({
     >
       <article
         className={[
-          "relative h-full w-full overflow-visible rounded-2xl border bg-card/95 shadow-sm transition",
+          "relative h-full w-full overflow-visible border bg-card/95 shadow-sm transition",
           "hover:-translate-y-0.5 hover:shadow-md",
-          tone.shell,
+          presentation.shellClassName,
+          getShapeClassName(presentation.shape),
           selected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "",
         ].join(" ")}
         onPointerDown={(event) => {
@@ -232,8 +236,13 @@ function RuntimeWorkflowCanvasNode({
           }),
         )}
 
-        <div className="flex h-full flex-col overflow-hidden rounded-2xl">
-          <header className="flex items-start gap-3 border-b bg-muted/25 px-3 py-2.5">
+        <div className="flex h-full flex-col overflow-hidden rounded-[inherit]">
+          <header
+            className={[
+              "flex items-start gap-3 border-b px-3 py-2.5",
+              presentation.headerClassName,
+            ].join(" ")}
+          >
             <Button
               type="button"
               variant="ghost"
@@ -246,20 +255,30 @@ function RuntimeWorkflowCanvasNode({
                 onHoverChange(null);
                 onStartDrag(event);
               }}
-              aria-label="Move block"
+              aria-label="Move foundation block"
             >
               <GripVertical className="size-4" aria-hidden="true" />
             </Button>
 
+            <div
+              className={[
+                "flex h-9 min-w-11 shrink-0 items-center justify-center rounded-xl px-2 text-[10px] font-black tracking-tight shadow-sm",
+                presentation.iconClassName,
+              ].join(" ")}
+              aria-hidden="true"
+            >
+              {presentation.iconLabel}
+            </div>
+
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="truncate text-sm font-semibold leading-tight">
-                    {block.label}
-                  </h3>
-                  <p className="truncate text-[10px] text-muted-foreground">
-                    #{index + 1} · {block.type}
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {presentation.eyebrow}
                   </p>
+                  <h3 className="truncate text-base font-bold leading-tight">
+                    {presentation.primaryText}
+                  </h3>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1" data-no-node-hover="true">
@@ -272,7 +291,7 @@ function RuntimeWorkflowCanvasNode({
                       hideDetails(event);
                       onEdit();
                     }}
-                    aria-label="Edit block"
+                    aria-label="Edit foundation block"
                   >
                     <Settings2 className="size-4" aria-hidden="true" />
                   </Button>
@@ -286,34 +305,69 @@ function RuntimeWorkflowCanvasNode({
                       hideDetails(event);
                       onDelete();
                     }}
-                    aria-label="Delete block"
+                    aria-label="Delete foundation block"
                   >
                     <Trash2 className="size-4" aria-hidden="true" />
                   </Button>
                 </div>
               </div>
 
-              <span
-                className={[
-                  "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                  tone.badge,
-                ].join(" ")}
-              >
-                runtime
-              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className={[
+                    "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                    presentation.badgeClassName,
+                  ].join(" ")}
+                >
+                  model
+                </span>
+
+                {presentation.chips.slice(0, 3).map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground"
+                  >
+                    {chip}
+                  </span>
+                ))}
+
+                {diagnosticCount > 0 ? (
+                  <span
+                    className={[
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      errorCount > 0
+                        ? "bg-destructive/15 text-destructive"
+                        : warningCount > 0
+                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                          : "bg-muted text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {errorCount > 0
+                      ? `${errorCount} error${errorCount === 1 ? "" : "s"}`
+                      : warningCount > 0
+                        ? `${warningCount} warning${warningCount === 1 ? "" : "s"}`
+                        : `${diagnosticCount} note${diagnosticCount === 1 ? "" : "s"}`}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </header>
 
           <div className="min-h-0 flex-1 space-y-2 px-4 py-3">
-            <p className="line-clamp-2 text-xs text-muted-foreground">
-              {block.description || "No description yet."}
-            </p>
+            <div className="rounded-xl bg-background/70 p-2.5">
+              <p className="truncate text-sm font-semibold">
+                {presentation.secondaryText}
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {presentation.detailText}
+              </p>
+            </div>
 
             <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
               <div className="rounded-lg border bg-background/50 px-2 py-1.5">
                 <p className="font-semibold uppercase tracking-wide">Input</p>
                 <p className="mt-0.5 truncate">
-                  {inputDetails[0] ?? "No input preview"}
+                  {formatHiddenDetail(inputDetails) || "No input preview"}
                 </p>
               </div>
               <div className="rounded-lg border bg-background/50 px-2 py-1.5">
@@ -330,7 +384,7 @@ function RuntimeWorkflowCanvasNode({
             type="button"
             className={[
               "absolute right-[-0.7rem] z-20 flex size-6 items-center justify-center rounded-full border-2 shadow-sm transition hover:scale-110",
-              tone.connector,
+              presentation.connectorClassName,
             ].join(" ")}
             style={{
               top: `${getEvenPosition(portIndex, ports.outputs.length)}%`,
@@ -356,19 +410,11 @@ function RuntimeWorkflowCanvasNode({
           data-no-node-hover="true"
           onPointerEnter={() => onHoverChange(null)}
           onPointerDown={startResize}
-          aria-label="Resize block"
+          aria-label="Resize foundation block"
         >
           <Maximize2 className="size-3.5" aria-hidden="true" />
         </button>
       </article>
     </div>
   );
-}
-
-export function WorkflowCanvasNode(props: WorkflowCanvasNodeProps) {
-  if (isFoundationCustomToolBlockType(props.block.type)) {
-    return <FoundationWorkflowCanvasNode {...props} />;
-  }
-
-  return <RuntimeWorkflowCanvasNode {...props} />;
 }
