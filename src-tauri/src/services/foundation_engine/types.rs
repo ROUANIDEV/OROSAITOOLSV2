@@ -19,6 +19,8 @@ pub struct FoundationRunOptions {
     pub max_loop_iterations: usize,
     #[serde(default)]
     pub fail_fast: bool,
+    #[serde(default)]
+    pub dry_run: bool,
 }
 
 impl Default for FoundationRunOptions {
@@ -26,6 +28,7 @@ impl Default for FoundationRunOptions {
         Self {
             max_loop_iterations: default_max_loop_iterations(),
             fail_fast: false,
+            dry_run: false,
         }
     }
 }

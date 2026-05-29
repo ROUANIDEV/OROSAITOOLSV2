@@ -3,21 +3,24 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-
 import type { CustomToolBlock } from "../../../domain/customToolTypes";
-
+import type { FoundationArrowInputSuggestion } from "../../../runtime/foundationWorkflowRuntime";
 import { CustomToolBlockRow } from "../components/CustomToolBlockRow";
+import { FoundationLinkedInputsPanel } from "../components/FoundationLinkedInputsPanel";
 
 type WorkflowBlockSettingsDialogProps = {
   block: CustomToolBlock | null;
   index: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  linkedInputSuggestions?: FoundationArrowInputSuggestion[];
   onClose: () => void;
   onChange: (block: CustomToolBlock) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
+  onApplyLinkedInput?: (connectionId: string) => void;
+  onRemoveLinkedInput?: (connectionId: string) => void;
 };
 
 export function WorkflowBlockSettingsDialog({
@@ -25,11 +28,14 @@ export function WorkflowBlockSettingsDialog({
   index,
   canMoveUp,
   canMoveDown,
+  linkedInputSuggestions = [],
   onClose,
   onChange,
   onMoveUp,
   onMoveDown,
   onRemove,
+  onApplyLinkedInput,
+  onRemoveLinkedInput,
 }: WorkflowBlockSettingsDialogProps) {
   useEffect(() => {
     if (!block) return;
@@ -55,7 +61,6 @@ export function WorkflowBlockSettingsDialog({
         <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
           <div className="min-w-0">
             <p className="text-sm font-medium">Block settings</p>
-
             <p className="break-all text-xs text-muted-foreground">
               Double-click canvas blocks to open this editor.
             </p>
@@ -72,7 +77,13 @@ export function WorkflowBlockSettingsDialog({
           </Button>
         </div>
 
-        <div className="max-h-[calc(92vh-4.5rem)] overflow-y-auto p-5">
+        <div className="max-h-[calc(92vh-4.5rem)] space-y-4 overflow-y-auto p-5">
+          <FoundationLinkedInputsPanel
+            suggestions={linkedInputSuggestions}
+            onApply={onApplyLinkedInput}
+            onRemove={onRemoveLinkedInput}
+          />
+
           <CustomToolBlockRow
             block={block}
             index={index}
