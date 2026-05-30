@@ -1,48 +1,56 @@
-import {
-  isFoundationCustomToolBlockType,
-  type CustomToolBlock,
-  type CustomToolBlockType,
+import type {
+  CustomToolBlock,
+  CustomToolBlockType,
 } from "../../domain/customToolTypes";
-import { getFoundationBlockDefinition } from "../foundation";
+import { isFoundationCustomToolBlockType } from "../../domain/customToolTypes";
 import { createBlockConfigPreset } from "./blockConfigPresets";
-import { getBlockTypeDescription, getBlockTypeLabel } from "./blockTypeOptions";
+import { getBlockTypeLabel } from "./blockTypeOptions";
 
-function createBlockId(type: CustomToolBlockType) {
-  const safeType = type.replace(/\./g, "-");
-  const randomPart = Math.random().toString(36).slice(2, 8);
+function randomIdPart() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
-  return `${safeType}-${Date.now()}-${randomPart}`;
+function createBlockId(type: CustomToolBlockType | string) {
+  return `${String(type).replace(/[^a-zA-Z0-9]+/g, "-")}-${randomIdPart()}`;
+}
+
+function createRuntimeId(prefix: string) {
+  return `${prefix}_${randomIdPart().slice(0, 6)}`;
 }
 
 export function createCustomToolBlock(
-  type: CustomToolBlockType = "text.template",
+  type: CustomToolBlockType,
 ): CustomToolBlock {
-  if (isFoundationCustomToolBlockType(type)) {
-    const definition = getFoundationBlockDefinition(type);
+  const blockId = createBlockId(type);
+  const config = createBlockConfigPreset(type);
+  let label = getBlockTypeLabel(type);
 
-    return {
-      id: createBlockId(type),
-      type,
-      label: definition.defaultLabel,
-      description: definition.summary,
-      executionMode: "model",
-      config: {
-        ...createBlockConfigPreset(type),
-        _foundation: {
-          category: definition.category,
-          kind: definition.kind,
-          modelOnly: true,
-        },
-      },
-    };
+  if (type === "io.input") {
+    config.inputId = createRuntimeId("input");
+    label = "Number input";
+  }
+
+  if (type === "io.output") {
+    config.outputId = createRuntimeId("output");
+    label = "Result";
+  }
+
+  if (type === "math.operation") {
+    config.resultName = createRuntimeId("math");
+    label = "Math operation";
+  }
+
+  if (type === "logic.compare") {
+    config.resultName = createRuntimeId("compare");
+    label = "Compare";
   }
 
   return {
-    id: createBlockId(type),
+    id: blockId,
     type,
-    label: getBlockTypeLabel(type),
-    description: getBlockTypeDescription(type) || "Describe what this block does.",
-    executionMode: "runtime",
-    config: createBlockConfigPreset(type),
+    label,
+    description: "",
+    executionMode: isFoundationCustomToolBlockType(type) ? "model" : "runtime",
+    config,
   };
 }

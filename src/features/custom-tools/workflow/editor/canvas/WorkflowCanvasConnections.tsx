@@ -24,6 +24,27 @@ type WorkflowCanvasConnectionsProps = {
   onSelectConnection: (connectionId: string) => void;
 };
 
+function createConnectionPathFromPoints(
+  start: { x: number; y: number },
+  end: { x: number; y: number; side?: string },
+  curved: boolean,
+) {
+  if (!curved) return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+
+  if (end.side === "top") {
+    const middleY = Math.min(start.y, end.y) - 140;
+    return `M ${start.x} ${start.y} C ${start.x + 120} ${start.y}, ${end.x} ${middleY}, ${end.x} ${end.y}`;
+  }
+
+  if (end.side === "bottom") {
+    const middleY = Math.max(start.y, end.y) + 140;
+    return `M ${start.x} ${start.y} C ${start.x + 120} ${start.y}, ${end.x} ${middleY}, ${end.x} ${end.y}`;
+  }
+
+  const curve = Math.max(120, Math.abs(end.x - start.x) / 2);
+  return `M ${start.x} ${start.y} C ${start.x + curve} ${start.y}, ${end.x - curve} ${end.y}, ${end.x} ${end.y}`;
+}
+
 function createConnectionPath(
   fromBlock: CustomToolBlock,
   toBlock: CustomToolBlock,
@@ -34,29 +55,7 @@ function createConnectionPath(
 ) {
   const start = getOutputPortAnchor(fromBlock, from, connection.fromPortId);
   const end = getInputPortAnchor(toBlock, to, connection.toPortId);
-
-  if (!curved) return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-
-  if (end.side === "top") {
-    const middleY = Math.min(start.y, end.y) - 140;
-    return `M ${start.x} ${start.y} C ${start.x + 120} ${start.y}, ${
-      end.x
-    } ${middleY}, ${end.x} ${end.y}`;
-  }
-
-  if (end.side === "bottom") {
-    const middleY = Math.max(start.y, end.y) + 140;
-
-    return `M ${start.x} ${start.y} C ${start.x + 120} ${start.y}, ${
-      end.x
-    } ${middleY}, ${end.x} ${end.y}`;
-  }
-
-  const curve = Math.max(120, Math.abs(end.x - start.x) / 2);
-
-  return `M ${start.x} ${start.y} C ${start.x + curve} ${start.y}, ${
-    end.x - curve
-  } ${end.y}, ${end.x} ${end.y}`;
+  return createConnectionPathFromPoints(start, end, curved);
 }
 
 function createDraftConnectionPath(
@@ -66,12 +65,11 @@ function createDraftConnectionPath(
   toPoint: WorkflowCanvasPoint,
 ) {
   const start = getOutputPortAnchor(fromBlock, fromLayout, fromPortId);
-  const curve = Math.max(120, Math.abs(toPoint.x - start.x) / 2);
-
-  return `M ${start.x} ${start.y} C ${start.x + curve} ${start.y}, ${
-    toPoint.x - curve
-  } ${toPoint.y}, ${toPoint.x} ${toPoint.y}`;
+  return createConnectionPathFromPoints(start, toPoint, true);
 }
+
+const arrowMarkerId = "workflow-canvas-arrow-head";
+const selectedArrowMarkerId = "workflow-canvas-arrow-head-selected";
 
 export function WorkflowCanvasConnections({
   blocks,
@@ -83,28 +81,38 @@ export function WorkflowCanvasConnections({
   height,
   onSelectConnection,
 }: WorkflowCanvasConnectionsProps) {
-  const blockById = new Map(blocks.map((block) => [block.id, block]));
+  const blockById = new Map(blocks.map((block) => [block.id, block] as const));
 
   return (
     <svg
-      className="absolute left-0 top-0 z-20 overflow-visible"
+      className="pointer-events-none absolute inset-0 overflow-visible"
       width={width}
       height={height}
-      style={{
-        overflow: "visible",
-        pointerEvents: "none",
-      }}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden="true"
     >
       <defs>
         <marker
-          id="workflow-arrowhead"
+          id={arrowMarkerId}
           markerWidth="10"
           markerHeight="10"
-          refX="8"
-          refY="3"
+          refX="9"
+          refY="5"
           orient="auto"
+          markerUnits="strokeWidth"
         >
-          <path d="M0,0 L0,6 L9,3 z" className="fill-muted-foreground" />
+          <path d="M 0 1 L 10 5 L 0 9 z" className="fill-muted-foreground/70" />
+        </marker>
+        <marker
+          id={selectedArrowMarkerId}
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path d="M 0 1 L 10 5 L 0 9 z" className="fill-primary" />
         </marker>
       </defs>
 
@@ -113,7 +121,6 @@ export function WorkflowCanvasConnections({
         const to = layouts.get(connection.toBlockId);
         const fromBlock = blockById.get(connection.fromBlockId);
         const toBlock = blockById.get(connection.toBlockId);
-
         if (!from || !to || !fromBlock || !toBlock) return null;
 
         const path = createConnectionPath(
@@ -130,28 +137,33 @@ export function WorkflowCanvasConnections({
           <g key={connection.id}>
             <path
               d={path}
-              className={
-                selected
-                  ? "fill-none stroke-primary"
-                  : "fill-none stroke-muted-foreground/50"
-              }
-              strokeWidth={selected ? 3 : 2}
-              strokeDasharray={connection.style === "dashed" ? "7 7" : undefined}
-              markerEnd="url(#workflow-arrowhead)"
-            />
-
-            <path
-              d={path}
-              className="cursor-pointer fill-none stroke-transparent"
-              data-no-pan="true"
-              data-workflow-connection-hitbox="true"
-              strokeWidth="18"
-              style={{ pointerEvents: "stroke" }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
+              fill="none"
+              stroke="transparent"
+              strokeWidth="22"
+              strokeLinecap="round"
+              pointerEvents="stroke"
+              onPointerDown={(event) => {
+                event.preventDefault();
                 event.stopPropagation();
                 onSelectConnection(connection.id);
               }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onSelectConnection(connection.id);
+              }}
+            />
+            <path
+              d={path}
+              className={[
+                "pointer-events-none fill-none transition",
+                selected ? "stroke-primary" : "stroke-muted-foreground/70",
+              ].join(" ")}
+              strokeWidth={selected ? 3.5 : 2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray={connection.style === "dashed" ? "9 8" : undefined}
+              markerEnd={`url(#${selected ? selectedArrowMarkerId : arrowMarkerId})`}
             />
           </g>
         );
@@ -162,7 +174,6 @@ export function WorkflowCanvasConnections({
           d={(() => {
             const from = layouts.get(draftConnection.fromBlockId);
             const fromBlock = blockById.get(draftConnection.fromBlockId);
-
             return from && fromBlock
               ? createDraftConnectionPath(
                   fromBlock,
@@ -175,7 +186,9 @@ export function WorkflowCanvasConnections({
           className="pointer-events-none fill-none stroke-primary"
           strokeDasharray="8 8"
           strokeWidth="3"
-          markerEnd="url(#workflow-arrowhead)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          markerEnd={`url(#${selectedArrowMarkerId})`}
         />
       ) : null}
     </svg>

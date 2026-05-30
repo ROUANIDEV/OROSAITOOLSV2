@@ -1,20 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { BuilderWorkspaceStage } from "../components/BuilderWorkspaceTabs";
-
-
 import type { CustomToolWorkflowEditorSession } from "../../workflow/editor/CustomToolWorkflowEditor";
+import { DEFAULT_WORKFLOW_CANVAS_VIEWPORT } from "../../workflow/graph/workflowCanvasViewport";
 import type { CustomToolTestPanelSession } from "../../runtime/components/CustomToolTestPanel";
 import type { TestInputValues } from "../../runtime/state/testRunTypes";
-
 import {
   loadCustomToolBuilderSession,
   saveCustomToolBuilderSession,
   type CustomToolBuilderSession,
 } from "../state/customToolBuilderSessionStorage";
-
 import type { DraftSaveStatus } from "./usePersistedCustomToolDraft";
-import { DEFAULT_WORKFLOW_CANVAS_VIEWPORT } from "../../workflow/graph/workflowCanvasViewport";
 
 const SESSION_SAVE_DEBOUNCE_MS = 500;
 const MAX_PERSISTED_WORKFLOW_HISTORY = 25;
@@ -25,15 +21,17 @@ const MAX_PERSISTED_EXECUTION_PLAN_ITEMS = 120;
 
 const BUILDER_STAGES: BuilderWorkspaceStage[] = [
   "overview",
-  "inputs",
   "canvas",
   "safety",
   "test",
   "publish",
 ];
 
-function isBuilderWorkspaceStage(value: unknown): value is BuilderWorkspaceStage {
-  return BUILDER_STAGES.includes(value as BuilderWorkspaceStage);
+function normalizeStage(value: unknown): BuilderWorkspaceStage {
+  if (value === "inputs") return "canvas";
+  return BUILDER_STAGES.includes(value as BuilderWorkspaceStage)
+    ? (value as BuilderWorkspaceStage)
+    : "canvas";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,9 +51,7 @@ function asNullableString(value: unknown) {
 }
 
 function normalizeTestInputValues(value: unknown): TestInputValues {
-  if (!isRecord(value)) {
-    return {};
-  }
+  if (!isRecord(value)) return {};
 
   return Object.entries(value).reduce<TestInputValues>(
     (values, [inputId, inputValue]) => {
@@ -66,7 +62,6 @@ function normalizeTestInputValues(value: unknown): TestInputValues {
       ) {
         values[inputId] = inputValue;
       }
-
       return values;
     },
     {},
@@ -76,9 +71,7 @@ function normalizeTestInputValues(value: unknown): TestInputValues {
 function normalizeWorkflowEditorSession(
   value: unknown,
 ): CustomToolWorkflowEditorSession | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
 
   const viewport = isRecord(value.viewport)
     ? {
@@ -107,29 +100,22 @@ function normalizeWorkflowEditorSession(
 function normalizeWorkflowSessionRecord(
   value: unknown,
 ): Record<string, CustomToolWorkflowEditorSession> {
-  if (!isRecord(value)) {
-    return {};
-  }
+  if (!isRecord(value)) return {};
 
-  return Object.entries(value).reduce<
-    Record<string, CustomToolWorkflowEditorSession>
-  >((sessions, [draftId, sessionValue]) => {
-    const session = normalizeWorkflowEditorSession(sessionValue);
-
-    if (session) {
-      sessions[draftId] = session;
-    }
-
-    return sessions;
-  }, {});
+  return Object.entries(value).reduce<Record<string, CustomToolWorkflowEditorSession>>(
+    (sessions, [draftId, sessionValue]) => {
+      const session = normalizeWorkflowEditorSession(sessionValue);
+      if (session) sessions[draftId] = session;
+      return sessions;
+    },
+    {},
+  );
 }
 
 function normalizeTestPanelSession(
   value: unknown,
 ): CustomToolTestPanelSession | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
 
   return {
     values: normalizeTestInputValues(value.values),
@@ -149,18 +135,12 @@ function normalizeTestPanelSession(
 function normalizeTestSessionRecord(
   value: unknown,
 ): Record<string, CustomToolTestPanelSession> {
-  if (!isRecord(value)) {
-    return {};
-  }
+  if (!isRecord(value)) return {};
 
   return Object.entries(value).reduce<Record<string, CustomToolTestPanelSession>>(
     (sessions, [draftId, sessionValue]) => {
       const session = normalizeTestPanelSession(sessionValue);
-
-      if (session) {
-        sessions[draftId] = session;
-      }
-
+      if (session) sessions[draftId] = session;
       return sessions;
     },
     {},
@@ -182,16 +162,11 @@ function normalizeCustomToolBuilderSession(
   session: CustomToolBuilderSession | null,
 ): CustomToolBuilderSession {
   const defaults = createDefaultCustomToolBuilderSession();
-
-  if (!session || !isRecord(session)) {
-    return defaults;
-  }
+  if (!session || !isRecord(session)) return defaults;
 
   return {
     schemaVersion: 1,
-    activeStage: isBuilderWorkspaceStage(session.activeStage)
-      ? session.activeStage
-      : defaults.activeStage,
+    activeStage: normalizeStage(session.activeStage),
     workflowSessionByDraftId: normalizeWorkflowSessionRecord(
       session.workflowSessionByDraftId,
     ),
@@ -207,12 +182,14 @@ function sanitizeCustomToolBuilderSessionForStorage(
   return normalizeCustomToolBuilderSession(session);
 }
 
-export function usePersistedCustomToolBuilderSession() {
-  const [builderSession, setBuilderSession] =
-    useState<CustomToolBuilderSession>(() =>
-      createDefaultCustomToolBuilderSession(),
-    );
-
+export function usePersistedCustomToolBuilderSession(): {
+  builderSession: CustomToolBuilderSession;
+  setBuilderSession: Dispatch<SetStateAction<CustomToolBuilderSession>>;
+  saveStatus: DraftSaveStatus;
+} {
+  const [builderSession, setBuilderSession] = useState(() =>
+    createDefaultCustomToolBuilderSession(),
+  );
   const [hasLoaded, setHasLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>("loading");
 
@@ -221,17 +198,13 @@ export function usePersistedCustomToolBuilderSession() {
 
     async function loadSession() {
       const savedSession = await loadCustomToolBuilderSession();
-
-      if (!isMounted) {
-        return;
-      }
-
+      if (!isMounted) return;
       setBuilderSession(normalizeCustomToolBuilderSession(savedSession));
       setHasLoaded(true);
       setSaveStatus(savedSession ? "saved" : "idle");
     }
 
-    loadSession();
+    void loadSession();
 
     return () => {
       isMounted = false;
@@ -239,29 +212,19 @@ export function usePersistedCustomToolBuilderSession() {
   }, []);
 
   useEffect(() => {
-    if (!hasLoaded) {
-      return;
-    }
+    if (!hasLoaded) return;
 
     let isCancelled = false;
-
     const timeoutId = window.setTimeout(async () => {
       try {
         setSaveStatus("saving");
-
         await saveCustomToolBuilderSession(
           sanitizeCustomToolBuilderSessionForStorage(builderSession),
         );
-
-        if (!isCancelled) {
-          setSaveStatus("saved");
-        }
+        if (!isCancelled) setSaveStatus("saved");
       } catch (error) {
         console.error("Failed to save custom tool builder session.", error);
-
-        if (!isCancelled) {
-          setSaveStatus("error");
-        }
+        if (!isCancelled) setSaveStatus("error");
       }
     }, SESSION_SAVE_DEBOUNCE_MS);
 
@@ -271,9 +234,5 @@ export function usePersistedCustomToolBuilderSession() {
     };
   }, [builderSession, hasLoaded]);
 
-  return {
-    builderSession,
-    setBuilderSession,
-    saveStatus,
-  };
+  return { builderSession, setBuilderSession, saveStatus };
 }

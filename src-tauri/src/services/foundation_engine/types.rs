@@ -107,4 +107,5 @@ pub struct FunctionDefinition {
     pub parameters: Vec<String>,
     pub body_block_ids: Vec<String>,
     pub return_type: String,
+    pub return_expression: Option<String>,
 }

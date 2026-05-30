@@ -5,9 +5,7 @@ import type {
 } from "../../domain/customToolTypes";
 
 export type { WorkflowConnectionStyle } from "../../domain/customToolTypes";
-
 export type WorkflowConnection = CustomToolWorkflowConnection;
-
 export type WorkflowWithVisualConnections = CustomToolManifest["workflow"];
 
 function createConnectionId(fromBlockId: string, toBlockId: string) {
@@ -24,6 +22,36 @@ function isConnectionStyle(value: unknown): value is WorkflowConnection["style"]
   return value === "solid" || value === "dashed" || value === "curved";
 }
 
+function normalizeSourcePort(portId?: string) {
+  return typeof portId === "string" && portId.trim() ? portId : "output";
+}
+
+function normalizeTargetPort(portId?: string) {
+  return typeof portId === "string" && portId.trim() ? portId : "input";
+}
+
+function sameSourcePort(
+  connection: WorkflowConnection,
+  fromBlockId: string,
+  fromPortId?: string,
+) {
+  return (
+    connection.fromBlockId === fromBlockId &&
+    normalizeSourcePort(connection.fromPortId) === normalizeSourcePort(fromPortId)
+  );
+}
+
+function sameTargetPort(
+  connection: WorkflowConnection,
+  toBlockId: string,
+  toPortId?: string,
+) {
+  return (
+    connection.toBlockId === toBlockId &&
+    normalizeTargetPort(connection.toPortId) === normalizeTargetPort(toPortId)
+  );
+}
+
 function sanitizeConnection(
   value: unknown,
   blockIds: Set<string>,
@@ -31,7 +59,6 @@ function sanitizeConnection(
   if (!value || typeof value !== "object") return null;
 
   const candidate = value as Partial<WorkflowConnection>;
-
   if (
     typeof candidate.fromBlockId !== "string" ||
     typeof candidate.toBlockId !== "string" ||
@@ -62,7 +89,6 @@ function sanitizeConnection(
 export function createOrderedWorkflowConnections(blocks: CustomToolBlock[]) {
   return blocks.slice(0, -1).map((block, index) => {
     const nextBlock = blocks[index + 1];
-
     return {
       id: `ordered-${block.id}-${nextBlock.id}`,
       fromBlockId: block.id,
@@ -83,9 +109,7 @@ export function getWorkflowConnections(draft: CustomToolManifest) {
 
   return draft.workflow.visualConnections
     .map((connection) => sanitizeConnection(connection, blockIds))
-    .filter((connection): connection is WorkflowConnection => {
-      return Boolean(connection);
-    });
+    .filter((connection): connection is WorkflowConnection => Boolean(connection));
 }
 
 export function withWorkflowConnections(
@@ -110,14 +134,24 @@ export function addWorkflowConnection(
 ) {
   if (fromBlockId === toBlockId) return connections;
 
+  const sourcePortId = normalizeSourcePort(fromPortId);
+  const targetPortId = normalizeTargetPort(toPortId);
+
+  const nextConnections = connections.filter((connection) => {
+    return (
+      !sameSourcePort(connection, fromBlockId, sourcePortId) &&
+      !sameTargetPort(connection, toBlockId, targetPortId)
+    );
+  });
+
   return [
-    ...connections,
+    ...nextConnections,
     {
       id: createConnectionId(fromBlockId, toBlockId),
       fromBlockId,
       toBlockId,
-      fromPortId,
-      toPortId,
+      fromPortId: sourcePortId,
+      toPortId: targetPortId,
       style: "curved" as const,
     },
   ];
@@ -130,11 +164,7 @@ export function updateConnectionStyle(
 ) {
   return connections.map((connection) => {
     if (connection.id !== connectionId) return connection;
-
-    return {
-      ...connection,
-      style,
-    };
+    return { ...connection, style };
   });
 }
 
@@ -144,18 +174,32 @@ export function updateConnectionEndpoint(
   endpoint: "from" | "to",
   blockId: string,
 ) {
-  return connections.map((connection) => {
-    if (connection.id !== connectionId) return connection;
+  const existing = connections.find((connection) => connection.id === connectionId);
+  if (!existing) return connections;
 
-    const fromBlockId = endpoint === "from" ? blockId : connection.fromBlockId;
-    const toBlockId = endpoint === "to" ? blockId : connection.toBlockId;
+  const nextConnection = {
+    ...existing,
+    fromBlockId: endpoint === "from" ? blockId : existing.fromBlockId,
+    toBlockId: endpoint === "to" ? blockId : existing.toBlockId,
+  };
 
-    if (fromBlockId === toBlockId) return connection;
+  if (nextConnection.fromBlockId === nextConnection.toBlockId) return connections;
 
-    return {
-      ...connection,
-      fromBlockId,
-      toBlockId,
-    };
-  });
+  return connections
+    .filter((connection) => {
+      if (connection.id === connectionId) return false;
+      return (
+        !sameSourcePort(
+          connection,
+          nextConnection.fromBlockId,
+          nextConnection.fromPortId,
+        ) &&
+        !sameTargetPort(
+          connection,
+          nextConnection.toBlockId,
+          nextConnection.toPortId,
+        )
+      );
+    })
+    .concat(nextConnection);
 }

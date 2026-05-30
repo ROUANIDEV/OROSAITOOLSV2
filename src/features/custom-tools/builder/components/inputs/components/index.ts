@@ -1,2 +1,2 @@
-export * from "./CustomToolInputRow";
-export * from "./CustomToolInputsEditor";
+export { CustomToolInputsEditor } from "./CustomToolInputsEditor";
+export { CustomToolInputRow } from "./CustomToolInputRow";

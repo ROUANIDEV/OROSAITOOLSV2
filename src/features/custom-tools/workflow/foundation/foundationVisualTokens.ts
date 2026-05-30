@@ -25,6 +25,15 @@ function visualToken(
 }
 
 export const foundationVisualTokensByCategory = {
+  io: visualToken(
+    "rose",
+    "Cable",
+    "bg-rose-500",
+    "bg-rose-500/10",
+    "border-rose-500/45",
+    "text-rose-700 dark:text-rose-300",
+    "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+  ),
   data: visualToken(
     "sky",
     "Database",
@@ -33,6 +42,24 @@ export const foundationVisualTokensByCategory = {
     "border-sky-500/40",
     "text-sky-700 dark:text-sky-300",
     "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  ),
+  math: visualToken(
+    "amber",
+    "Calculator",
+    "bg-amber-500",
+    "bg-amber-500/10",
+    "border-amber-500/45",
+    "text-amber-700 dark:text-amber-300",
+    "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  ),
+  logic: visualToken(
+    "violet",
+    "GitCompareArrows",
+    "bg-violet-500",
+    "bg-violet-500/10",
+    "border-violet-500/45",
+    "text-violet-700 dark:text-violet-300",
+    "bg-violet-500/15 text-violet-700 dark:text-violet-300",
   ),
   scope: visualToken(
     "slate",

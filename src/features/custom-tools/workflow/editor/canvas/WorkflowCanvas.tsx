@@ -4,17 +4,19 @@ import {
   MousePointer2,
   Move3D,
   Redo2,
-  Route,
   Trash2,
   Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-  WheelEvent,
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+  type WheelEvent,
 } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,12 +24,10 @@ import type {
   CustomToolBlock,
   CustomToolInput,
 } from "../../../domain/customToolTypes";
-import {
-  getInputPortHitTargets,
-  type WorkflowPortTarget,
+import type {
+  WorkflowPortConnectionPulse,
+  WorkflowPortTarget,
 } from "../../model/workflowBlockPorts";
-import { WorkflowCanvasConnections } from "./WorkflowCanvasConnections";
-import { WorkflowCanvasNode } from "./WorkflowCanvasNode";
 import {
   getBlockLayout,
   getDropPreviewLayout,
@@ -40,18 +40,20 @@ import {
   DEFAULT_WORKFLOW_CANVAS_VIEWPORT,
   type WorkflowCanvasViewport,
 } from "../../graph/workflowCanvasViewport";
-import { WorkflowConnectionPreviewArrows } from "./WorkflowConnectionPreviewArrows";
-import { WorkflowConnectionToolbar } from "./WorkflowConnectionToolbar";
 import type {
   WorkflowConnection,
   WorkflowConnectionStyle,
 } from "../../graph/workflowConnections";
-import { WorkflowDragPreviewNode } from "./WorkflowDragPreviewNode";
-import { WorkflowNodeDetailsPopover } from "./WorkflowNodeDetailsPopover";
 import type {
   ActiveWorkflowPointerDrag,
   WorkflowCanvasPoint,
 } from "../../graph/workflowPointerDragTypes";
+import { WorkflowCanvasConnections } from "./WorkflowCanvasConnections";
+import { WorkflowCanvasNode } from "./WorkflowCanvasNode";
+import { WorkflowConnectionPreviewArrows } from "./WorkflowConnectionPreviewArrows";
+import { WorkflowConnectionToolbar } from "./WorkflowConnectionToolbar";
+import { WorkflowDragPreviewNode } from "./WorkflowDragPreviewNode";
+import { WorkflowNodeDetailsPopover } from "./WorkflowNodeDetailsPopover";
 
 type WorkflowCanvasProps = {
   canvasRef: RefObject<HTMLDivElement | null>;
@@ -145,7 +147,6 @@ function getSelectionRect(selectionBox: SelectionBox) {
   const top = Math.min(selectionBox.start.y, selectionBox.current.y);
   const right = Math.max(selectionBox.start.x, selectionBox.current.x);
   const bottom = Math.max(selectionBox.start.y, selectionBox.current.y);
-
   return {
     left,
     top,
@@ -168,6 +169,24 @@ function blockIntersectsRect(
   );
 }
 
+function getExactCanvasPortTargetFromElement(
+  element: Element | null,
+  portKind: "input" | "output",
+): WorkflowPortTarget | null {
+  const selector =
+    portKind === "input"
+      ? "[data-workflow-input-port='true']"
+      : "[data-workflow-output-port='true']";
+  const portElement = element?.closest(selector);
+  if (!(portElement instanceof HTMLElement)) return null;
+
+  const blockId = portElement.dataset.workflowBlockId;
+  const portId = portElement.dataset.workflowPortId;
+  if (!blockId || !portId) return null;
+
+  return { blockId, portId };
+}
+
 function GroupDragPreviewNodes({ previews }: { previews: GroupDragPreview[] }) {
   if (previews.length === 0) return null;
 
@@ -176,32 +195,17 @@ function GroupDragPreviewNodes({ previews }: { previews: GroupDragPreview[] }) {
       {previews.map(({ block, layout }) => (
         <div
           key={block.id}
-          className="pointer-events-none absolute z-85 rounded-2xl border-2 border-primary/70 bg-background/50 p-3 pb-6 opacity-75 shadow-2xl backdrop-blur-sm"
+          className="pointer-events-none absolute rounded-2xl border border-primary/50 bg-primary/10 p-3 text-xs text-primary shadow-xl"
           style={{
             left: layout.x,
             top: layout.y,
             width: layout.width,
-            height: layout.height,
+            minHeight: layout.height,
           }}
         >
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <div className="mb-2 flex items-start gap-2">
-              <div className="rounded-lg border bg-muted/70 p-1.5">
-                <span className="block h-4 w-4 rounded bg-primary/45" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{block.label}</p>
-                <p className="truncate font-mono text-[11px] text-muted-foreground">
-                  {block.type}
-                </p>
-              </div>
-            </div>
-
-            <p className="min-h-0 flex-1 overflow-hidden text-xs leading-relaxed text-muted-foreground">
-              Moving with selected group.
-            </p>
-          </div>
+          <p className="font-semibold">{block.label}</p>
+          <p className="text-[11px] opacity-80">{block.type}</p>
+          <p className="mt-2 text-[11px]">Moving with selected group.</p>
         </div>
       ))}
     </>
@@ -242,41 +246,32 @@ export function WorkflowCanvas({
   const selectionBoxRef = useRef<SelectionBox | null>(null);
   const [panMode, setPanMode] = useState(true);
   const [hoveredBlock, setHoveredBlock] = useState<CustomToolBlock | null>(null);
-  const [hoverPosition, setHoverPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const [draftConnection, setDraftConnection] =
-    useState<DraftConnection | null>(null);
-  const [activeInputTarget, setActiveInputTarget] =
-    useState<WorkflowPortTarget | null>(null);
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [draftConnection, setDraftConnection] = useState<DraftConnection | null>(null);
+  const [activeInputTarget, setActiveInputTarget] = useState<WorkflowPortTarget | null>(null);
+  const [recentConnection, setRecentConnection] =
+    useState<WorkflowPortConnectionPulse | null>(null);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
-
-  const suppressDetails =
-    isDragging || draftConnection !== null || selectionBox !== null;
+  const suppressDetails = isDragging || draftConnection !== null || selectionBox !== null;
 
   const layouts = useMemo(() => {
     return new Map(
       blocks.map((block, index) => {
-        return [block.id, getBlockLayout(block, index)];
+        return [block.id, getBlockLayout(block, index)] as const;
       }),
     );
   }, [blocks]);
 
   const selectedConnection =
-    connections.find((connection) => connection.id === selectedConnectionId) ??
-    null;
+    connections.find((connection) => connection.id === selectedConnectionId) ?? null;
 
   const selectedConnectionToolbarPosition = useMemo(() => {
     if (!selectedConnection) return null;
-
     const from = layouts.get(selectedConnection.fromBlockId);
     const to = layouts.get(selectedConnection.toBlockId);
     if (!from || !to) return null;
-
     const canvasX = (from.x + from.width + to.x) / 2;
     const canvasY = (from.y + to.y) / 2;
-
     return {
       x: clampToolbarPosition(canvasX * viewport.zoom + viewport.panX - 160, 900),
       y: clampToolbarPosition(canvasY * viewport.zoom + viewport.panY, 540),
@@ -286,9 +281,7 @@ export function WorkflowCanvas({
   const getCanvasPoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-
     const rect = canvas.getBoundingClientRect();
-
     return {
       x: (clientX - rect.left - viewport.panX) / viewport.zoom,
       y: (clientY - rect.top - viewport.panY) / viewport.zoom,
@@ -303,10 +296,10 @@ export function WorkflowCanvas({
       : null;
 
   const dragPreviewState = useMemo<DragPreviewState>(() => {
-    const emptyState = {
+    const emptyState: DragPreviewState = {
       previews: [],
-      previewLayouts: new Map<string, WorkflowBlockLayout>(),
-      movedBlockIds: new Set<string>(),
+      previewLayouts: new Map(),
+      movedBlockIds: new Set(),
     };
 
     if (!activeDrag || activeDrag.kind !== "existing-block" || !dropPreview) {
@@ -315,7 +308,6 @@ export function WorkflowCanvas({
 
     const draggedBlock = blocks[activeDrag.blockIndex];
     if (!draggedBlock) return emptyState;
-
     const draggedLayout = layouts.get(draggedBlock.id);
     if (!draggedLayout) return emptyState;
 
@@ -323,7 +315,6 @@ export function WorkflowCanvas({
       selectedBlockIds.includes(draggedBlock.id) && selectedBlockIds.length > 1
         ? new Set(selectedBlockIds)
         : new Set([draggedBlock.id]);
-
     const deltaX = dropPreview.x - draggedLayout.x;
     const deltaY = dropPreview.y - draggedLayout.y;
     const previewLayouts = new Map<string, WorkflowBlockLayout>();
@@ -336,13 +327,8 @@ export function WorkflowCanvas({
           x: layout.x + deltaX,
           y: layout.y + deltaY,
         };
-
         previewLayouts.set(block.id, nextLayout);
-
-        return {
-          block,
-          layout: nextLayout,
-        };
+        return { block, layout: nextLayout };
       });
 
     return {
@@ -352,31 +338,22 @@ export function WorkflowCanvas({
     };
   }, [activeDrag, blocks, dropPreview, layouts, selectedBlockIds]);
 
-  const findInputPortAtPoint = (
-    point: WorkflowCanvasPoint,
+  const findExactInputPort = (
+    clientX: number,
+    clientY: number,
     exceptBlockId: string,
-  ) => {
-    const candidates = blocks.flatMap((block) => {
-      if (block.id === exceptBlockId) return [];
-
-      const layout = layouts.get(block.id);
-      if (!layout) return [];
-
-      return getInputPortHitTargets(block, layout);
-    });
-
-    return (
-      candidates.find((candidate) => {
-        const dx = candidate.x - point.x;
-        const dy = candidate.y - point.y;
-        return Math.sqrt(dx * dx + dy * dy) <= candidate.radius;
-      }) ?? null
+  ): WorkflowPortTarget | null => {
+    const exact = getExactCanvasPortTargetFromElement(
+      document.elementFromPoint(clientX, clientY),
+      "input",
     );
+
+    if (!exact || exact.blockId === exceptBlockId) return null;
+    return exact;
   };
 
   const selectBlocksInsideBox = (box: SelectionBox) => {
     const rect = getSelectionRect(box);
-
     if (rect.width < 6 && rect.height < 6) {
       onSelectBlocks([]);
       return;
@@ -395,14 +372,11 @@ export function WorkflowCanvas({
   const nudgeViewportForScreenPoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const rect = canvas.getBoundingClientRect();
-
     const leftDelta = getEdgePanDelta(clientX - rect.left);
     const rightDelta = getEdgePanDelta(rect.right - clientX);
     const topDelta = getEdgePanDelta(clientY - rect.top);
     const bottomDelta = getEdgePanDelta(rect.bottom - clientY);
-
     if (!leftDelta && !rightDelta && !topDelta && !bottomDelta) return;
 
     onViewportChange({
@@ -425,42 +399,28 @@ export function WorkflowCanvas({
     if (!panMode) {
       const startPoint = getCanvasPoint(event.clientX, event.clientY);
       if (!startPoint) return;
-
       event.preventDefault();
       setHoveredBlock(null);
       onSelectConnection(null);
-
-      const initialBox = {
-        start: startPoint,
-        current: startPoint,
-      };
-
+      const initialBox = { start: startPoint, current: startPoint };
       selectionBoxRef.current = initialBox;
       setSelectionBox(initialBox);
 
       const handleMove = (moveEvent: PointerEvent) => {
         const currentPoint = getCanvasPoint(moveEvent.clientX, moveEvent.clientY);
         if (!currentPoint || !selectionBoxRef.current) return;
-
-        const nextBox = {
-          ...selectionBoxRef.current,
-          current: currentPoint,
-        };
-
+        const nextBox = { ...selectionBoxRef.current, current: currentPoint };
         selectionBoxRef.current = nextBox;
         setSelectionBox(nextBox);
       };
 
       const handleUp = () => {
         const completedBox = selectionBoxRef.current;
-
         if (completedBox) {
           selectBlocksInsideBox(completedBox);
         }
-
         selectionBoxRef.current = null;
         setSelectionBox(null);
-
         window.removeEventListener("pointermove", handleMove);
         window.removeEventListener("pointerup", handleUp);
       };
@@ -472,7 +432,6 @@ export function WorkflowCanvas({
 
     event.preventDefault();
     setHoveredBlock(null);
-
     const startX = event.clientX;
     const startY = event.clientY;
     const startPanX = viewport.panX;
@@ -502,55 +461,40 @@ export function WorkflowCanvas({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-
     const startPoint = getCanvasPoint(event.clientX, event.clientY);
     if (!startPoint) return;
 
     setHoveredBlock(null);
-    setDraftConnection({
-      fromBlockId,
-      fromPortId,
-      toPoint: startPoint,
-    });
+    setDraftConnection({ fromBlockId, fromPortId, toPoint: startPoint });
 
     const handleMove = (moveEvent: PointerEvent) => {
       const nextPoint = getCanvasPoint(moveEvent.clientX, moveEvent.clientY);
       if (!nextPoint) return;
-
       nudgeViewportForScreenPoint(moveEvent.clientX, moveEvent.clientY);
-
-      setDraftConnection({
-        fromBlockId,
-        fromPortId,
-        toPoint: nextPoint,
-      });
-
-      const target = findInputPortAtPoint(nextPoint, fromBlockId);
+      setDraftConnection({ fromBlockId, fromPortId, toPoint: nextPoint });
       setActiveInputTarget(
-        target
-          ? {
-              blockId: target.blockId,
-              portId: target.portId,
-            }
-          : null,
+        findExactInputPort(moveEvent.clientX, moveEvent.clientY, fromBlockId),
       );
     };
 
     const handleUp = (upEvent: PointerEvent) => {
-      const endPoint = getCanvasPoint(upEvent.clientX, upEvent.clientY);
-      if (endPoint) {
-        const target = findInputPortAtPoint(endPoint, fromBlockId);
-
-        if (target) {
-          onAddConnection(
-            fromBlockId,
-            target.blockId,
-            fromPortId,
-            target.portId,
+      const target = findExactInputPort(upEvent.clientX, upEvent.clientY, fromBlockId);
+      if (target) {
+        onAddConnection(fromBlockId, target.blockId, fromPortId, target.portId);
+        const pulse = {
+          fromBlockId,
+          fromPortId,
+          toBlockId: target.blockId,
+          toPortId: target.portId,
+          token: Date.now(),
+        };
+        setRecentConnection(pulse);
+        window.setTimeout(() => {
+          setRecentConnection((current) =>
+            current?.token === pulse.token ? null : current,
           );
-        }
+        }, 900);
       }
-
       setDraftConnection(null);
       setActiveInputTarget(null);
       window.removeEventListener("pointermove", handleMove);
@@ -584,7 +528,6 @@ export function WorkflowCanvas({
   const zoomBy = (delta: number) => {
     const canvas = canvasRef.current;
     const rect = canvas?.getBoundingClientRect();
-
     zoomAtScreenPoint(
       rect ? rect.left + rect.width / 2 : 0,
       rect ? rect.top + rect.height / 2 : 0,
@@ -594,7 +537,6 @@ export function WorkflowCanvas({
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
-
     const delta = event.deltaY > 0 ? -0.08 : 0.08;
     zoomAtScreenPoint(
       event.clientX,
@@ -611,117 +553,78 @@ export function WorkflowCanvas({
   const isGroupDragging = dragPreviewState.previews.length > 1;
 
   return (
-    <div className="max-w-full rounded-[2rem] border bg-muted/20 p-3 shadow-inner sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-3xl border bg-background/80 px-4 py-3 shadow-sm">
-        <div className="min-w-0">
+    <div className="relative overflow-hidden rounded-3xl border bg-background/40">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card/60 px-4 py-3">
+        <div>
           <p className="text-sm font-semibold">Free workflow canvas</p>
           <p className="text-xs text-muted-foreground">
-            Drag previews now include related connection arrows.
+            Pan, zoom, select, and build the tool visually on the canvas.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1 rounded-full bg-muted px-3 py-1">
-            <MousePointer2 className="h-3 w-3" />
-            Marquee select
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onUndo} disabled={!canUndo}>
+            <Undo2 className="mr-1 h-3.5 w-3.5" /> Undo
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onRedo} disabled={!canRedo}>
+            <Redo2 className="mr-1 h-3.5 w-3.5" /> Redo
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRequestDeleteSelection}
+            disabled={!canDeleteSelection}
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete selected
+          </Button>
+          <span className="mx-1 h-6 w-px bg-border" />
+          <Button type="button" variant="outline" size="sm" onClick={() => zoomBy(-0.1)}>
+            <ZoomOut className="h-3.5 w-3.5" />
+          </Button>
+          <span className="min-w-14 text-center text-xs text-muted-foreground">
+            {Math.round(viewport.zoom * 100)}%
           </span>
-          <span className="flex items-center gap-1 rounded-full bg-muted px-3 py-1">
-            <Move3D className="h-3 w-3" />
-            Group preview
-          </span>
-          <span className="flex items-center gap-1 rounded-full bg-muted px-3 py-1">
-            <Route className="h-3 w-3" />
-            Preview arrows
-          </span>
+          <Button type="button" variant="outline" size="sm" onClick={() => zoomBy(0.1)}>
+            <ZoomIn className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant={panMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPanMode(true)}
+          >
+            <Hand className="mr-1 h-3.5 w-3.5" /> Pan
+          </Button>
+          <Button
+            type="button"
+            variant={!panMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPanMode(false)}
+          >
+            <MousePointer2 className="mr-1 h-3.5 w-3.5" /> Select
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={resetView}>
+            <LocateFixed className="mr-1 h-3.5 w-3.5" /> Reset
+          </Button>
         </div>
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={onUndo} disabled={!canUndo}>
-          <Undo2 className="mr-2 h-4 w-4" />
-          Undo
-        </Button>
-
-        <Button type="button" size="sm" variant="outline" onClick={onRedo} disabled={!canRedo}>
-          <Redo2 className="mr-2 h-4 w-4" />
-          Redo
-        </Button>
-
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={onRequestDeleteSelection}
-          disabled={!canDeleteSelection}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete selected
-        </Button>
-
-        <Button type="button" size="sm" variant="outline" onClick={() => zoomBy(-0.1)}>
-          <ZoomOut className="mr-2 h-4 w-4" />
-          Zoom out
-        </Button>
-
-        <span className="rounded-md border bg-background px-3 py-1.5 text-xs text-muted-foreground">
-          {Math.round(viewport.zoom * 100)}%
-        </span>
-
-        <Button type="button" size="sm" variant="outline" onClick={() => zoomBy(0.1)}>
-          <ZoomIn className="mr-2 h-4 w-4" />
-          Zoom in
-        </Button>
-
-        <Button
-          type="button"
-          size="sm"
-          variant={panMode ? "default" : "outline"}
-          onClick={() => setPanMode(true)}
-        >
-          <Hand className="mr-2 h-4 w-4" />
-          Pan cursor
-        </Button>
-
-        <Button
-          type="button"
-          size="sm"
-          variant={!panMode ? "default" : "outline"}
-          onClick={() => setPanMode(false)}
-        >
-          <MousePointer2 className="mr-2 h-4 w-4" />
-          Select area
-        </Button>
-
-        <Button type="button" size="sm" variant="outline" onClick={resetView}>
-          <LocateFixed className="mr-2 h-4 w-4" />
-          Reset view
-        </Button>
       </div>
 
       <div
         ref={canvasRef}
-        className={`relative h-176 max-w-full overflow-hidden rounded-[1.75rem] border border-dashed bg-background/70 transition ${
-          panMode ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
-        }`}
+        className="relative h-[640px] cursor-grab overflow-hidden bg-[radial-gradient(circle_at_1px_1px,hsl(var(--muted-foreground)/0.15)_1px,transparent_0)] [background-size:24px_24px] active:cursor-grabbing"
         onPointerDown={startPanOrSelection}
         onWheel={handleWheel}
       >
         <div
-          className="absolute left-0 top-0 overflow-visible"
+          className="absolute left-0 top-0 origin-top-left"
           style={{
             width: WORKFLOW_CANVAS_WIDTH,
             height: WORKFLOW_CANVAS_HEIGHT,
-            overflow: "visible",
             transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`,
-            transformOrigin: "0 0",
           }}
           onPointerDown={() => onSelectConnection(null)}
         >
-          <div
-            className="pointer-events-none absolute -inset-25000 bg-[radial-gradient(circle_at_1px_1px,hsl(var(--muted-foreground)/0.18)_1px,transparent_0)] bg-size-[28px_28px]"
-            aria-hidden="true"
-          />
-
           <WorkflowCanvasConnections
             blocks={blocks}
             connections={connections}
@@ -733,45 +636,32 @@ export function WorkflowCanvas({
             onSelectConnection={onSelectConnection}
           />
 
-          <WorkflowConnectionPreviewArrows
-            blocks={blocks}
-            connections={connections}
-            originalLayouts={layouts}
-            previewLayouts={dragPreviewState.previewLayouts}
-            movedBlockIds={dragPreviewState.movedBlockIds}
-            width={WORKFLOW_CANVAS_WIDTH}
-            height={WORKFLOW_CANVAS_HEIGHT}
-          />
-
           {isGroupDragging ? (
-            <GroupDragPreviewNodes previews={dragPreviewState.previews} />
-          ) : (
-            <WorkflowDragPreviewNode activeDrag={activeDrag} layout={dropPreview} />
-          )}
+            <WorkflowConnectionPreviewArrows
+              blocks={blocks}
+              connections={connections}
+              originalLayouts={layouts}
+              previewLayouts={dragPreviewState.previewLayouts}
+              movedBlockIds={dragPreviewState.movedBlockIds}
+              width={WORKFLOW_CANVAS_WIDTH}
+              height={WORKFLOW_CANVAS_HEIGHT}
+            />
+          ) : null}
 
           {renderedSelectionRect ? (
             <div
-              className="pointer-events-none absolute z-120 rounded-xl border border-primary bg-primary/15 shadow-[0_0_28px_hsl(var(--primary)/0.25)]"
-              style={{
-                left: renderedSelectionRect.left,
-                top: renderedSelectionRect.top,
-                width: renderedSelectionRect.width,
-                height: renderedSelectionRect.height,
-              }}
+              className="pointer-events-none absolute rounded-2xl border border-primary bg-primary/10"
+              style={renderedSelectionRect}
             />
           ) : null}
 
           {blocks.length === 0 ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8 text-center">
-              <div className="max-w-md space-y-2 rounded-3xl border bg-background/90 p-6 shadow-sm">
-                <p className="text-lg font-semibold">
-                  Drop your first block anywhere
-                </p>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  The canvas is visually unbounded. Pan, zoom, or select an
-                  area.
-                </p>
-              </div>
+            <div className="absolute left-1/2 top-40 w-80 -translate-x-1/2 rounded-3xl border bg-card/90 p-6 text-center shadow-xl">
+              <Move3D className="mx-auto h-8 w-8 text-muted-foreground" />
+              <p className="mt-3 font-semibold">Drop your first block anywhere</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The canvas is visually unbounded. Pan, zoom, or select an area.
+              </p>
             </div>
           ) : null}
 
@@ -782,12 +672,11 @@ export function WorkflowCanvas({
               index={index}
               inputs={inputs}
               layout={layouts.get(block.id) ?? getBlockLayout(block, index)}
-              selected={
-                selectedBlockIds.includes(block.id) ||
-                selectedBlockId === block.id
-              }
+              selected={selectedBlockId === block.id || selectedBlockIds.includes(block.id)}
               suppressDetails={suppressDetails}
               activeInputTarget={activeInputTarget}
+              connections={connections}
+              recentConnection={recentConnection}
               onSelect={() => {
                 onSelectConnection(null);
                 onSelectBlock(block.id);
@@ -808,7 +697,19 @@ export function WorkflowCanvas({
               onHoverMove={setHoverPosition}
             />
           ))}
+
+          {isGroupDragging ? (
+            <GroupDragPreviewNodes previews={dragPreviewState.previews} />
+          ) : (
+            <WorkflowDragPreviewNode activeDrag={activeDrag} layout={dropPreview} />
+          )}
         </div>
+
+        <WorkflowNodeDetailsPopover
+          block={hoveredBlock}
+          inputs={inputs}
+          position={hoverPosition}
+        />
 
         <WorkflowConnectionToolbar
           blocks={blocks}
@@ -824,21 +725,13 @@ export function WorkflowCanvas({
           }}
           onEndpointChange={(endpoint, blockId) => {
             if (selectedConnection) {
-              onConnectionEndpointChange(
-                selectedConnection.id,
-                endpoint,
-                blockId,
-              );
+              onConnectionEndpointChange(selectedConnection.id, endpoint, blockId);
             }
           }}
         />
-      </div>
 
-      <WorkflowNodeDetailsPopover
-        block={suppressDetails ? null : hoveredBlock}
-        inputs={inputs}
-        position={hoverPosition}
-      />
+
+      </div>
     </div>
   );
 }

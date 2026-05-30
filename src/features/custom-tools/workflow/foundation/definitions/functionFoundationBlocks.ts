@@ -59,28 +59,28 @@ export const functionFoundationBlockDefinitions = [
     category: "function",
     summary: "Create a reusable workflow function.",
     description:
-      "Represents a named function with parameters, return type, and an internal block body.",
+      "Represents a named function with parameters, return type, return expression, and an internal block body.",
     defaultLabel: "Define function",
     tags: ["function", "definition", "reusable"],
     visual: getFoundationVisualToken("function"),
     inputs: [
-      foundationInput("body", "Body", {
+      foundationInput("body", "Body blocks", {
         role: "control",
         required: false,
+        description:
+          "Connect the body output to the first internal block. Body block ids are derived from arrows.",
       }),
     ],
     outputs: [
-      foundationOutput("function", "Function ref", {
-        dataType: "unknown",
-      }),
-      foundationOutput("return", "Return value", {
-        dataType: "unknown",
-      }),
+      foundationOutput("body", "Body", { role: "control" }),
+      foundationOutput("function", "Function ref", { dataType: "unknown" }),
+      foundationOutput("return", "Return value", { dataType: "unknown" }),
     ],
     defaultConfig: {
-      name: "run",
-      parameters: [],
-      returnType: "unknown",
+      name: "factorial",
+      parameters: ["n"],
+      returnType: "number",
+      returnExpression: "result",
       bodyBlockIds: [],
     },
   },
@@ -90,7 +90,7 @@ export const functionFoundationBlockDefinitions = [
     category: "function",
     summary: "Execute a function and capture its result.",
     description:
-      "Represents calling a built-in function, helper function, or user-defined function.",
+      "Arguments can be literals, variables, or connected canvas input values.",
     defaultLabel: "Call function",
     tags: ["function", "call", "invoke"],
     visual: getFoundationVisualToken("function"),
@@ -105,13 +105,12 @@ export const functionFoundationBlockDefinitions = [
       }),
     ],
     outputs: [
-      foundationOutput("result", "Result", {
-        dataType: "unknown",
-      }),
+      foundationOutput("result", "Result", { dataType: "unknown" }),
     ],
     defaultConfig: {
-      functionName: "",
-      arguments: [],
+      functionName: "factorial",
+      arguments: ["n"],
+      assignTo: "factorialResult",
       awaitResult: true,
     },
   },

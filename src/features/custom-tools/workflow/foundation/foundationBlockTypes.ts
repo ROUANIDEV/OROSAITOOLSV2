@@ -4,7 +4,10 @@ import {
 } from "../../domain/customToolTypes";
 
 export const foundationBlockCategories = [
+  "io",
   "data",
+  "math",
+  "logic",
   "scope",
   "function",
   "control-flow",
@@ -32,7 +35,6 @@ export const foundationDataTypes = [
 export type FoundationDataType = (typeof foundationDataTypes)[number];
 
 export const foundationBlockKinds = customToolFoundationBlockTypes;
-
 export type FoundationBlockKind = CustomToolFoundationBlockType;
 
 export type FoundationBlockPaletteTone =
@@ -44,7 +46,6 @@ export type FoundationBlockPaletteTone =
   | "rose";
 
 export type FoundationBlockPortDirection = "input" | "output";
-
 export type FoundationBlockPortRole = "data" | "control" | "scope";
 
 export type FoundationBlockPort = {

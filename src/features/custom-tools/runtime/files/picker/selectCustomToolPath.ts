@@ -1,27 +1,25 @@
 import { open } from "@tauri-apps/plugin-dialog";
 
-export type SelectCustomToolPathMode = "file" | "folder";
+export type CustomToolPathPickerMode = "file" | "folder";
 
-type SelectCustomToolPathArgs = {
-  mode: SelectCustomToolPathMode;
+export type SelectCustomToolPathOptions = {
+  mode: CustomToolPathPickerMode;
   title?: string;
 };
 
 export async function selectCustomToolPath({
   mode,
   title,
-}: SelectCustomToolPathArgs): Promise<string | null> {
-  const selectedPath = await open({
-    title:
-      title ??
-      (mode === "folder" ? "Select input folder" : "Select input file"),
-    multiple: false,
+}: SelectCustomToolPathOptions): Promise<string> {
+  const selected = await open({
+    title,
     directory: mode === "folder",
+    multiple: false,
   });
 
-  if (!selectedPath || Array.isArray(selectedPath)) {
-    return null;
+  if (Array.isArray(selected)) {
+    return typeof selected[0] === "string" ? selected[0] : "";
   }
 
-  return selectedPath;
+  return typeof selected === "string" ? selected : "";
 }

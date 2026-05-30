@@ -1,68 +1,55 @@
 import type { CustomToolBlockType } from "../../domain/customToolTypes";
 
-const pythonStarterCode = [
-  "import json",
-  "import sys",
-  "",
-  "payload = json.load(sys.stdin)",
-  "inputs = payload.get(\"inputs\", {})",
-  "",
-  "print(json.dumps({",
-  "  \"ok\": True,",
-  "  \"inputKeys\": list(inputs.keys())",
-  "}))",
-].join("\n");
+export type CustomToolBlockConfigPreset = Record<string, unknown>;
 
-export const defaultBlockConfigByType: Record<
-  CustomToolBlockType,
-  Record<string, unknown>
-> = {
-  "file.glob": {
-    rootInput: "",
-    pattern: "**/*",
+export const blockConfigPresets: Record<string, CustomToolBlockConfigPreset> = {
+  "io.input": {
+    inputId: "",
+    dataType: "number",
+    required: true,
+    description: "",
   },
-  "file.read": {
-    fileInput: "",
-  },
-  "text.template": {
-    template: "",
-  },
-  "python.code": {
-    code: pythonStarterCode,
-    timeoutMs: 5000,
-  },
-  "safety.preview": {
-    title: "Preview changes",
-  },
-  "file.appendText": {
-    targetInput: "",
-  },
-  "safety.confirm": {
-    message: "Confirm before applying changes.",
+  "io.output": {
+    outputId: "",
+    dataType: "unknown",
+    value: "",
+    description: "",
   },
   "variable.create": {
-    name: "value",
+    name: "result",
     scope: "local",
-    dataType: "string",
-    initialValue: "",
+    dataType: "number",
     mutable: true,
+    initialValue: 1,
   },
   "variable.assign": {
-    name: "value",
-    expression: "",
+    name: "result",
+    value: "",
   },
   "constant.create": {
-    name: "CONST_VALUE",
+    name: "CONSTANT",
     dataType: "string",
     value: "",
   },
   "expression.value": {
-    expression: "",
     dataType: "unknown",
+    expression: "",
   },
   "expression.template": {
     template: "",
-    missingValueStrategy: "empty-string",
+    missingValueStrategy: "empty",
+  },
+  "math.operation": {
+    resultName: "",
+    operator: "multiply",
+    left: "",
+    right: "",
+  },
+  "logic.compare": {
+    resultName: "",
+    operator: "equals",
+    left: "",
+    right: "",
   },
   "scope.global": {
     namespace: "global",
@@ -71,17 +58,18 @@ export const defaultBlockConfigByType: Record<
   "scope.local": {
     namespace: "local",
     inheritParent: true,
-    description: "",
   },
   "function.define": {
-    name: "run",
-    parameters: [],
-    returnType: "unknown",
+    name: "factorial",
+    parameters: ["n"],
+    returnType: "number",
     bodyBlockIds: [],
+    returnExpression: "result",
   },
   "function.call": {
-    functionName: "run",
+    functionName: "factorial",
     arguments: [],
+    assignTo: "factorialResult",
     awaitResult: true,
   },
   "control.if": {
@@ -97,16 +85,17 @@ export const defaultBlockConfigByType: Record<
     defaultCaseEnabled: true,
   },
   "loop.for": {
-    indexName: "index",
-    start: 0,
-    end: 10,
+    indexName: "i",
+    start: 2,
+    end: "",
     step: 1,
+    inclusiveEnd: true,
     bodyBlockIds: [],
   },
   "loop.forEach": {
     itemName: "item",
     indexName: "index",
-    items: [],
+    items: "",
     bodyBlockIds: [],
   },
   "loop.while": {
@@ -115,50 +104,35 @@ export const defaultBlockConfigByType: Record<
     bodyBlockIds: [],
   },
   "collection.array": {
-    outputName: "numbers",
-    itemType: "number",
-    items: [5, 1, 4, 2, 3],
+    items: [],
   },
   "collection.list": {
-    outputName: "items",
-    itemType: "unknown",
     items: [],
-    mutable: true,
   },
   "collection.dictionary": {
-    outputName: "dictionary",
-    keyType: "string",
-    valueType: "unknown",
-    entries: [],
+    entries: {},
   },
   "collection.get": {
     collection: "",
     key: "",
-    fallbackValue: null,
   },
   "collection.set": {
     collection: "",
     key: "",
-    value: null,
-    immutableUpdate: true,
+    value: "",
   },
   "collection.sort": {
-    outputName: "sortedNumbers",
     collection: "",
-    mode: "number",
     direction: "asc",
-    stable: true,
+  },
+  "python.code": {
+    code: "",
   },
 };
 
-export const blockConfigPresets = defaultBlockConfigByType;
-
-export function getBlockConfigPreset(type: CustomToolBlockType) {
-  return {
-    ...(defaultBlockConfigByType[type] ?? {}),
-  };
-}
-
-export function createBlockConfigPreset(type: CustomToolBlockType) {
-  return getBlockConfigPreset(type);
+export function createBlockConfigPreset(
+  type: CustomToolBlockType | string,
+): CustomToolBlockConfigPreset {
+  const preset = blockConfigPresets[String(type)] ?? {};
+  return JSON.parse(JSON.stringify(preset)) as CustomToolBlockConfigPreset;
 }

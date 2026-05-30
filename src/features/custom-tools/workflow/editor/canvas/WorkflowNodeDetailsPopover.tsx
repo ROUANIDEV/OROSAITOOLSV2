@@ -2,7 +2,6 @@ import type {
   CustomToolBlock,
   CustomToolInput,
 } from "../../../domain/customToolTypes";
-
 import {
   getBlockInputDetails,
   getBlockOutputPreview,
@@ -26,42 +25,41 @@ export function WorkflowNodeDetailsPopover({
 
   return (
     <div
-      className="pointer-events-none fixed z-200 w-80 rounded-2xl border bg-popover/85 p-4 text-xs shadow-2xl backdrop-blur-md"
+      className="pointer-events-none fixed z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border bg-popover/95 p-4 text-popover-foreground shadow-2xl backdrop-blur"
       style={{
         left: Math.min(position.x + 18, window.innerWidth - 340),
-        top: Math.min(position.y + 18, window.innerHeight - 260),
+        top: Math.min(position.y + 18, window.innerHeight - 360),
       }}
     >
-      <div className="mb-3">
+      <div>
         <p className="text-sm font-semibold">{block.label}</p>
-
-        <p className="font-mono text-[11px] text-muted-foreground">
-          {block.type}
-        </p>
+        <p className="text-xs text-muted-foreground">{block.type}</p>
       </div>
 
-      <div className="space-y-3">
-        <div>
-          <p className="mb-1 font-medium">Inputs</p>
-
+      <div className="mt-3 space-y-3 text-xs">
+        <section>
+          <p className="font-semibold text-muted-foreground">Inputs</p>
           {inputDetails.length > 0 ? (
-            inputDetails.map((detail) => (
-              <p key={detail} className="text-muted-foreground">
-                {detail}
-              </p>
-            ))
+            <ul className="mt-1 space-y-1">
+              {inputDetails.map((detail) => (
+                <li key={detail} className="rounded-lg bg-muted px-2 py-1">
+                  {detail}
+                </li>
+              ))}
+            </ul>
           ) : (
-            <p className="text-muted-foreground">No input preview.</p>
+            <p className="mt-1 rounded-lg bg-muted px-2 py-1 text-muted-foreground">
+              No input preview.
+            </p>
           )}
-        </div>
+        </section>
 
-        <div>
-          <p className="mb-1 font-medium">Output preview</p>
-
-          <p className="rounded-md bg-muted/80 px-2 py-1 font-mono text-muted-foreground">
+        <section>
+          <p className="font-semibold text-muted-foreground">Output preview</p>
+          <p className="mt-1 rounded-lg bg-muted px-2 py-1 text-muted-foreground">
             {outputPreview}
           </p>
-        </div>
+        </section>
       </div>
     </div>
   );

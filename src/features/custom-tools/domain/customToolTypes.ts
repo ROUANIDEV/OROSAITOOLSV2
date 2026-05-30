@@ -22,11 +22,16 @@ export type CustomToolExecutableBlockType =
   (typeof customToolExecutableBlockTypes)[number];
 
 export const customToolFoundationBlockTypes = [
+  "io.input",
+  "io.output",
   "variable.create",
   "variable.assign",
+  "variable.update",
   "constant.create",
   "expression.value",
   "expression.template",
+  "math.operation",
+  "logic.compare",
   "scope.global",
   "scope.local",
   "function.define",
@@ -73,6 +78,13 @@ export type CustomToolInput = {
   accept?: string[];
 };
 
+export type CustomToolOutput = {
+  id: string;
+  label: string;
+  type: CustomToolInputType | "json" | "array" | "object" | "unknown";
+  description?: string;
+};
+
 export type CustomToolBlock = {
   id: string;
   type: CustomToolBlockType;
@@ -103,6 +115,7 @@ export type CustomToolManifest = {
   createdAt: string;
   updatedAt: string;
   inputs: CustomToolInput[];
+  outputs?: CustomToolOutput[];
   workflow: CustomToolWorkflow;
   permissions: CustomToolPermissionSet;
 };

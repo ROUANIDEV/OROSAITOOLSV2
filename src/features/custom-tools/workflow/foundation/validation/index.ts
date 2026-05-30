@@ -20,6 +20,7 @@ export type FoundationBlockDiagnostic = {
   message: string;
   field?: string;
 };
+
 export type FoundationValidationResult = {
   diagnostics: FoundationBlockDiagnostic[];
   errorCount: number;
@@ -28,30 +29,6 @@ export type FoundationValidationResult = {
   hasErrors: boolean;
   hasWarnings: boolean;
 };
-
-function buildFoundationValidationResult(
-  diagnostics: FoundationBlockDiagnostic[],
-): FoundationValidationResult {
-  const errorCount = diagnostics.filter(
-    (diagnostic) => diagnostic.severity === "error",
-  ).length;
-  const warningCount = diagnostics.filter(
-    (diagnostic) => diagnostic.severity === "warning",
-  ).length;
-  const infoCount = diagnostics.filter(
-    (diagnostic) => diagnostic.severity === "info",
-  ).length;
-
-  return {
-    diagnostics,
-    errorCount,
-    warningCount,
-    infoCount,
-    hasErrors: errorCount > 0,
-    hasWarnings: warningCount > 0,
-  };
-}
-
 
 type FoundationValidationInput = {
   blockType?: FoundationBlockKind;
@@ -63,30 +40,25 @@ type FoundationValidationInput = {
 const identifierPattern = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const constantPattern = /^[A-Z_$][A-Z0-9_$]*$/;
 
-function stringConfig(
-  config: Record<string, unknown>,
-  key: string,
-  fallback = "",
-) {
-  const value = config[key];
-  return typeof value === "string" ? value : fallback;
+function buildFoundationValidationResult(
+  diagnostics: FoundationBlockDiagnostic[],
+): FoundationValidationResult {
+  const errorCount = diagnostics.filter((item) => item.severity === "error").length;
+  const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
+  const infoCount = diagnostics.filter((item) => item.severity === "info").length;
+  return {
+    diagnostics,
+    errorCount,
+    warningCount,
+    infoCount,
+    hasErrors: errorCount > 0,
+    hasWarnings: warningCount > 0,
+  };
 }
 
-function numberConfig(
-  config: Record<string, unknown>,
-  key: string,
-  fallback = 0,
-) {
+function stringConfig(config: Record<string, unknown>, key: string, fallback = "") {
   const value = config[key];
-
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  return fallback;
+  return typeof value === "string" ? value : fallback;
 }
 
 function dataTypeConfig(config: Record<string, unknown>) {
@@ -104,6 +76,20 @@ function diagnostic(
   field?: string,
 ): FoundationBlockDiagnostic {
   return { id, severity, title, message, field };
+}
+
+function stripReferenceBraces(value: string) {
+  const trimmed = value.trim();
+  const match = /^{{\s*([^}]+?)\s*}}$/.exec(trimmed);
+  return match ? match[1].trim() : trimmed;
+}
+
+export function isRuntimeReferenceExpression(value: unknown) {
+  if (typeof value !== "string") return false;
+  const normalized = stripReferenceBraces(value);
+  if (!normalized) return false;
+  if (identifierPattern.test(normalized)) return true;
+  return /[A-Za-z_$]/.test(normalized) && /^[A-Za-z0-9_$\s.+\-*/%()<>=!&|,?:]+$/.test(normalized);
 }
 
 function validateIdentifier(
@@ -131,7 +117,7 @@ function validateIdentifier(
         `${field}-invalid`,
         "error",
         `Invalid ${label.toLowerCase()}`,
-        `${label} must be a valid identifier. Use names like project, filePath, or total_count. Do not start with a number and do not use spaces.`,
+        `${label} must be a valid identifier. Use names like n, result, filePath, or total_count. Do not start with a number and do not use spaces.`,
         field,
       ),
     );
@@ -143,7 +129,6 @@ function validateConstantIdentifier(
   value: string,
 ) {
   validateIdentifier(diagnostics, value, "name", "Constant name");
-
   if (value && identifierPattern.test(value) && !constantPattern.test(value)) {
     diagnostics.push(
       diagnostic(
@@ -166,8 +151,9 @@ function validateTypedConfigValue(
     label: string;
   },
 ) {
-  const check = checkFoundationTypedValue(options.dataType, options.value);
+  if (isRuntimeReferenceExpression(options.value)) return;
 
+  const check = checkFoundationTypedValue(options.dataType, options.value);
   if (!check.ok) {
     diagnostics.push(
       diagnostic(
@@ -175,13 +161,22 @@ function validateTypedConfigValue(
         "error",
         `${options.label} type mismatch`,
         check.message ??
-          `${options.label} does not match configured type ${String(
-            options.dataType,
-          )}.`,
+          `${options.label} does not match configured type ${String(options.dataType)}.`,
         options.field,
       ),
     );
   }
+}
+
+function parseNumberOrReference(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const trimmed = stripReferenceBraces(value);
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  if (Number.isFinite(parsed)) return parsed;
+  if (isRuntimeReferenceExpression(trimmed)) return trimmed;
+  return null;
 }
 
 function validateFunctionParameters(
@@ -189,16 +184,14 @@ function validateFunctionParameters(
   config: Record<string, unknown>,
 ) {
   const parameters = config.parameters;
-
   if (typeof parameters === "undefined") return;
-
   if (!Array.isArray(parameters)) {
     diagnostics.push(
       diagnostic(
         "parameters-invalid",
         "error",
         "Invalid parameters",
-        "Function parameters must be an array.",
+        "Function parameters must be an array of names or { name, type } objects.",
         "parameters",
       ),
     );
@@ -206,13 +199,28 @@ function validateFunctionParameters(
   }
 
   parameters.forEach((parameter, index) => {
+    if (typeof parameter === "string") {
+      if (!identifierPattern.test(parameter)) {
+        diagnostics.push(
+          diagnostic(
+            `parameter-${index}-name-invalid`,
+            "error",
+            "Invalid parameter name",
+            `Parameter #${index + 1} must be a valid identifier name.`,
+            "parameters",
+          ),
+        );
+      }
+      return;
+    }
+
     if (!parameter || typeof parameter !== "object" || Array.isArray(parameter)) {
       diagnostics.push(
         diagnostic(
           `parameter-${index}-invalid`,
           "error",
           "Invalid parameter",
-          `Parameter #${index + 1} must be an object with name and type fields.`,
+          `Parameter #${index + 1} must be a name string or an object with a name field.`,
           "parameters",
         ),
       );
@@ -221,7 +229,6 @@ function validateFunctionParameters(
 
     const parameterConfig = parameter as Record<string, unknown>;
     const name = stringConfig(parameterConfig, "name");
-
     if (!name || !identifierPattern.test(name)) {
       diagnostics.push(
         diagnostic(
@@ -241,51 +248,48 @@ function validateDictionaryEntries(
   config: Record<string, unknown>,
 ) {
   const entries = config.entries;
-
   if (typeof entries === "undefined") return;
+  if (isRuntimeReferenceExpression(entries)) return;
+  if (Array.isArray(entries)) return;
+  if (entries && typeof entries === "object") return;
+  diagnostics.push(
+    diagnostic(
+      "entries-invalid",
+      "error",
+      "Invalid dictionary entries",
+      "Dictionary entries must be an object, an array of { key, value } objects, or a runtime reference.",
+      "entries",
+    ),
+  );
+}
 
-  if (!Array.isArray(entries)) {
+function validateIoInput(
+  diagnostics: FoundationBlockDiagnostic[],
+  config: Record<string, unknown>,
+) {
+  validateIdentifier(diagnostics, stringConfig(config, "inputId"), "inputId", "Input id");
+}
+
+function validateIoOutput(
+  diagnostics: FoundationBlockDiagnostic[],
+  config: Record<string, unknown>,
+) {
+  validateIdentifier(diagnostics, stringConfig(config, "outputId"), "outputId", "Output id");
+  const value = config.value ?? config.expression;
+  if (
+    typeof value === "undefined" ||
+    (typeof value === "string" && value.trim().length === 0)
+  ) {
     diagnostics.push(
       diagnostic(
-        "entries-invalid",
-        "error",
-        "Invalid dictionary entries",
-        "Dictionary entries must be an array of { key, value } objects.",
-        "entries",
+        "value-empty",
+        "warning",
+        "Output value is empty",
+        "Connect a value arrow or choose a variable/function result for this output.",
+        "value",
       ),
     );
-    return;
   }
-
-  entries.forEach((entry, index) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      diagnostics.push(
-        diagnostic(
-          `entry-${index}-invalid`,
-          "error",
-          "Invalid dictionary entry",
-          `Entry #${index + 1} must be an object with key and value fields.`,
-          "entries",
-        ),
-      );
-      return;
-    }
-
-    const entryConfig = entry as Record<string, unknown>;
-    const key = entryConfig.key;
-
-    if (typeof key !== "string" || key.trim().length === 0) {
-      diagnostics.push(
-        diagnostic(
-          `entry-${index}-key-invalid`,
-          "error",
-          "Invalid dictionary key",
-          `Entry #${index + 1} must have a non-empty string key.`,
-          "entries",
-        ),
-      );
-    }
-  });
 }
 
 function validateVariableCreate(
@@ -293,12 +297,14 @@ function validateVariableCreate(
   config: Record<string, unknown>,
 ) {
   validateIdentifier(diagnostics, stringConfig(config, "name", "value"), "name", "Variable name");
-  validateTypedConfigValue(diagnostics, {
-    dataType: dataTypeConfig(config),
-    value: config.initialValue,
-    field: "initialValue",
-    label: "Initial value",
-  });
+  if (!(typeof config.initialValue === "string" && config.initialValue.trim().length === 0)) {
+    validateTypedConfigValue(diagnostics, {
+      dataType: dataTypeConfig(config),
+      value: config.initialValue,
+      field: "initialValue",
+      label: "Initial value",
+    });
+  }
 }
 
 function validateVariableAssign(
@@ -306,18 +312,50 @@ function validateVariableAssign(
   config: Record<string, unknown>,
 ) {
   validateIdentifier(diagnostics, stringConfig(config, "name", "value"), "name", "Variable name");
-
+  const value = config.value ?? config.expression;
   if (
-    typeof config.expression === "undefined" ||
-    (typeof config.expression === "string" && config.expression.trim().length === 0)
+    typeof value === "undefined" ||
+    (typeof value === "string" && value.trim().length === 0)
   ) {
     diagnostics.push(
       diagnostic(
-        "expression-empty",
+        "value-empty",
         "warning",
-        "Assignment expression is empty",
-        "This assignment currently has no expression/value to write into the variable.",
-        "expression",
+        "Assignment value is empty",
+        "Connect a Math operation result or choose a canvas value to write into the variable.",
+        "value",
+      ),
+    );
+  }
+}
+
+function validateVariableUpdate(
+  diagnostics: FoundationBlockDiagnostic[],
+  config: Record<string, unknown>,
+) {
+  validateIdentifier(diagnostics, stringConfig(config, "name", "result"), "name", "Variable name");
+  const initialValue = config.initialValue;
+  if (!(typeof initialValue === "string" && initialValue.trim().length === 0)) {
+    validateTypedConfigValue(diagnostics, {
+      dataType: dataTypeConfig(config) || "number",
+      value: initialValue,
+      field: "initialValue",
+      label: "Start value",
+    });
+  }
+
+  const operand = config.operand ?? config.value;
+  if (
+    typeof operand === "undefined" ||
+    (typeof operand === "string" && operand.trim().length === 0)
+  ) {
+    diagnostics.push(
+      diagnostic(
+        "operand-empty",
+        "warning",
+        "Update value is empty",
+        "Connect a number arrow into the Value to use port, for example For loop → Index.",
+        "operand",
       ),
     );
   }
@@ -349,19 +387,41 @@ function validateExpressionValue(
         "expression-empty",
         "info",
         "Expression is empty",
-        "Set an expression or literal value to make this block produce useful output.",
+        "Set an expression or choose a connected value to make this block produce useful output.",
         "expression",
       ),
     );
-    return;
+  }
+}
+
+
+function validateOperatorInputs(
+  diagnostics: FoundationBlockDiagnostic[],
+  config: Record<string, unknown>,
+  blockLabel: string,
+) {
+  const resultName = stringConfig(config, "resultName");
+  if (resultName) {
+    validateIdentifier(diagnostics, resultName, "resultName", "Result id");
   }
 
-  validateTypedConfigValue(diagnostics, {
-    dataType: dataTypeConfig(config),
-    value: config.expression,
-    field: "expression",
-    label: "Expression value",
-  });
+  for (const side of ["left", "right"] as const) {
+    const value = config[side];
+    if (
+      typeof value === "undefined" ||
+      (typeof value === "string" && value.trim().length === 0)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          `${side}-empty`,
+          "warning",
+          `${blockLabel} ${side} input is empty`,
+          `Connect a value arrow into the ${side} port or choose a canvas value.`,
+          side,
+        ),
+      );
+    }
+  }
 }
 
 function validateFunctionDefine(
@@ -377,14 +437,13 @@ function validateFunctionCall(
   config: Record<string, unknown>,
 ) {
   validateIdentifier(diagnostics, stringConfig(config, "functionName"), "functionName", "Function name");
-
   if (typeof config.arguments !== "undefined" && !Array.isArray(config.arguments)) {
     diagnostics.push(
       diagnostic(
         "arguments-invalid",
         "error",
         "Invalid function arguments",
-        "Function arguments must be an array.",
+        "Function arguments must be an array of runtime references or literal values.",
         "arguments",
       ),
     );
@@ -418,17 +477,21 @@ function validateForLoop(
 ) {
   validateIdentifier(diagnostics, stringConfig(config, "indexName", "index"), "indexName", "Index name");
 
-  const step = numberConfig(config, "step", 1);
+  const start = parseNumberOrReference(config.start);
+  const end = parseNumberOrReference(config.end);
+  const step = parseNumberOrReference(config.step ?? 1);
+
+  if (start === null) {
+    diagnostics.push(diagnostic("start-invalid", "error", "Invalid loop start", "Start must be a number, runtime id, or expression.", "start"));
+  }
+  if (end === null) {
+    diagnostics.push(diagnostic("end-invalid", "error", "Invalid loop end", "End must be a number, runtime id, or expression. Choose a canvas input id when the user provides the limit.", "end"));
+  }
+  if (step === null) {
+    diagnostics.push(diagnostic("step-invalid", "error", "Invalid loop step", "Step must be a number, runtime id, or expression.", "step"));
+  }
   if (step === 0) {
-    diagnostics.push(
-      diagnostic(
-        "step-zero",
-        "error",
-        "For loop step cannot be zero",
-        "A zero step would make the loop never progress.",
-        "step",
-      ),
-    );
+    diagnostics.push(diagnostic("step-zero", "error", "For loop step cannot be zero", "A zero step would make the loop never progress.", "step"));
   }
 }
 
@@ -445,9 +508,8 @@ function validateWhileLoop(
   config: Record<string, unknown>,
 ) {
   validateIfOrWhile(diagnostics, config, "While loop");
-
-  const maxIterations = numberConfig(config, "maxIterations", 100);
-  if (!Number.isFinite(maxIterations) || maxIterations <= 0) {
+  const maxIterations = parseNumberOrReference(config.maxIterations ?? 100);
+  if (typeof maxIterations === "number" && maxIterations <= 0) {
     diagnostics.push(
       diagnostic(
         "max-iterations-invalid",
@@ -467,19 +529,16 @@ function validateCollectionLiteral(
   label: string,
 ) {
   const value = config[field];
-
   if (typeof value === "undefined") return;
-
+  if (isRuntimeReferenceExpression(value)) return;
   const kind = getFoundationRuntimeValueKind(value);
-  const isArray = Array.isArray(value);
-
-  if (!isArray) {
+  if (!Array.isArray(value)) {
     diagnostics.push(
       diagnostic(
         `${field}-invalid`,
         "error",
         `Invalid ${label}`,
-        `${label} must be an array. Current value is ${kind}.`,
+        `${label} must be an array or a runtime reference. Current value is ${kind}.`,
         field,
       ),
     );
@@ -500,7 +559,7 @@ function validateCollectionGetSet(
         "key-empty",
         "warning",
         "Key or index is empty",
-        "Set a key or index, or connect one through the input port.",
+        "Set a key/index or connect one through the input port.",
         "key",
       ),
     );
@@ -524,12 +583,8 @@ function resolveValidationArgs(
   config?: Record<string, unknown>,
 ) {
   if (typeof blockTypeOrInput === "string") {
-    return {
-      blockType: blockTypeOrInput,
-      config: config ?? {},
-    };
+    return { blockType: blockTypeOrInput, config: config ?? {} };
   }
-
   return {
     blockType:
       blockTypeOrInput.blockType ?? blockTypeOrInput.type ?? blockTypeOrInput.kind,
@@ -552,17 +607,32 @@ export function validateFoundationBlockConfig(
   const diagnostics: FoundationBlockDiagnostic[] = [];
 
   switch (args.blockType) {
+    case "io.input":
+      validateIoInput(diagnostics, args.config);
+      break;
+    case "io.output":
+      validateIoOutput(diagnostics, args.config);
+      break;
     case "variable.create":
       validateVariableCreate(diagnostics, args.config);
       break;
     case "variable.assign":
       validateVariableAssign(diagnostics, args.config);
       break;
+    case "variable.update":
+      validateVariableUpdate(diagnostics, args.config);
+      break;
     case "constant.create":
       validateConstantCreate(diagnostics, args.config);
       break;
     case "expression.value":
       validateExpressionValue(diagnostics, args.config);
+      break;
+    case "math.operation":
+      validateOperatorInputs(diagnostics, args.config, "Math operation");
+      break;
+    case "logic.compare":
+      validateOperatorInputs(diagnostics, args.config, "Comparison");
       break;
     case "function.define":
       validateFunctionDefine(diagnostics, args.config);
@@ -608,13 +678,10 @@ export function hasBlockingFoundationDiagnostics(
   return diagnostics.some((diagnostic) => diagnostic.severity === "error");
 }
 
-export function validateFoundationBlock(
-  block: CustomToolBlock,
-): FoundationValidationResult {
+export function validateFoundationBlock(block: CustomToolBlock): FoundationValidationResult {
   if (!isFoundationCustomToolBlockType(block.type)) {
     return buildFoundationValidationResult([]);
   }
-
   return buildFoundationValidationResult(
     validateFoundationBlockConfig(block.type, block.config),
   );
@@ -627,10 +694,7 @@ export function validateFoundationWorkflowBlocks({
 }): FoundationValidationResult {
   const diagnostics = blocks.flatMap((block) => {
     if (!isFoundationCustomToolBlockType(block.type)) return [];
-
     return validateFoundationBlockConfig(block.type, block.config);
   });
-
   return buildFoundationValidationResult(diagnostics);
 }
-

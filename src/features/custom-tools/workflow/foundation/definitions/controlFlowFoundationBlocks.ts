@@ -9,7 +9,7 @@ export const controlFlowFoundationBlockDefinitions = [
     category: "control-flow",
     summary: "Branch workflow execution using a boolean condition.",
     description:
-      "Represents an if/else condition with true and false branch outputs.",
+      "Represents an if/else condition with true and false branch outputs. The condition can use variables, input ids, or expressions such as n > 1.",
     defaultLabel: "If condition",
     tags: ["condition", "if", "else", "branch"],
     visual: getFoundationVisualToken("control-flow"),
@@ -20,15 +20,13 @@ export const controlFlowFoundationBlockDefinitions = [
       }),
     ],
     outputs: [
-      foundationOutput("true", "True branch", {
-        role: "control",
-      }),
-      foundationOutput("false", "False branch", {
-        role: "control",
-      }),
+      foundationOutput("true", "True branch", { role: "control" }),
+      foundationOutput("false", "False branch", { role: "control" }),
     ],
     defaultConfig: {
       condition: "",
+      trueBodyBlockIds: [],
+      falseBodyBlockIds: [],
       falseBranchEnabled: true,
     },
   },
@@ -49,16 +47,13 @@ export const controlFlowFoundationBlockDefinitions = [
       }),
     ],
     outputs: [
-      foundationOutput("matched", "Matched case", {
-        role: "control",
-      }),
-      foundationOutput("default", "Default case", {
-        role: "control",
-      }),
+      foundationOutput("matched", "Matched case", { role: "control" }),
+      foundationOutput("default", "Default case", { role: "control" }),
     ],
     defaultConfig: {
       expression: "",
       cases: [],
+      defaultBodyBlockIds: [],
       defaultCaseEnabled: true,
     },
   },
@@ -66,9 +61,9 @@ export const controlFlowFoundationBlockDefinitions = [
     kind: "loop.for",
     title: "For loop",
     category: "control-flow",
-    summary: "Repeat a block range using index boundaries.",
+    summary: "Repeat body blocks using index boundaries.",
     description:
-      "Represents a classic for loop with index, start, end, and step values.",
+      "Start, end, and step are expression fields, not number-only fields. They can be hardcoded numbers, variables, canvas input ids such as n, or tokens such as {{n}}.",
     defaultLabel: "For loop",
     tags: ["loop", "for", "index"],
     visual: getFoundationVisualToken("control-flow"),
@@ -76,25 +71,35 @@ export const controlFlowFoundationBlockDefinitions = [
       foundationInput("start", "Start", {
         dataType: "number",
         required: true,
+        description: "Number, variable, or connected input value.",
       }),
       foundationInput("end", "End", {
         dataType: "number",
         required: true,
+        description: "Number, variable, or connected input value.",
+      }),
+      foundationInput("step", "Step", {
+        dataType: "number",
+        required: false,
+      }),
+      foundationInput("body", "Body blocks", {
+        role: "control",
+        required: false,
+        description:
+          "Connect the iteration/body output to the first block that should run inside the loop.",
       }),
     ],
     outputs: [
-      foundationOutput("iteration", "Iteration", {
-        role: "control",
-      }),
-      foundationOutput("index", "Index", {
-        dataType: "number",
-      }),
+      foundationOutput("iteration", "Iteration / body", { role: "control" }),
+      foundationOutput("completed", "Completed", { role: "control" }),
+      foundationOutput("index", "Index", { dataType: "number" }),
     ],
     defaultConfig: {
-      indexName: "index",
-      start: 0,
-      end: 10,
-      step: 1,
+      indexName: "i",
+      start: "2",
+      end: "n",
+      step: "1",
+      inclusiveEnd: true,
       bodyBlockIds: [],
     },
   },
@@ -102,7 +107,7 @@ export const controlFlowFoundationBlockDefinitions = [
     kind: "loop.forEach",
     title: "For each loop",
     category: "control-flow",
-    summary: "Repeat a block range for every item in a collection.",
+    summary: "Repeat body blocks for every item in a collection.",
     description:
       "Represents iterating through arrays, lists, dictionaries, or file lists.",
     defaultLabel: "For each",
@@ -113,21 +118,21 @@ export const controlFlowFoundationBlockDefinitions = [
         dataType: "array",
         required: true,
       }),
+      foundationInput("body", "Body blocks", {
+        role: "control",
+        required: false,
+      }),
     ],
     outputs: [
-      foundationOutput("iteration", "Iteration", {
-        role: "control",
-      }),
-      foundationOutput("item", "Item", {
-        dataType: "unknown",
-      }),
-      foundationOutput("index", "Index", {
-        dataType: "number",
-      }),
+      foundationOutput("iteration", "Iteration / body", { role: "control" }),
+      foundationOutput("completed", "Completed", { role: "control" }),
+      foundationOutput("item", "Item", { dataType: "unknown" }),
+      foundationOutput("index", "Index", { dataType: "number" }),
     ],
     defaultConfig: {
       itemName: "item",
       indexName: "index",
+      items: [],
       bodyBlockIds: [],
     },
   },
@@ -146,18 +151,18 @@ export const controlFlowFoundationBlockDefinitions = [
         dataType: "boolean",
         required: true,
       }),
+      foundationInput("body", "Body blocks", {
+        role: "control",
+        required: false,
+      }),
     ],
     outputs: [
-      foundationOutput("iteration", "Iteration", {
-        role: "control",
-      }),
-      foundationOutput("completed", "Completed", {
-        role: "control",
-      }),
+      foundationOutput("iteration", "Iteration / body", { role: "control" }),
+      foundationOutput("completed", "Completed", { role: "control" }),
     ],
     defaultConfig: {
       condition: "",
-      maxIterations: 100,
+      maxIterations: "100",
       bodyBlockIds: [],
     },
   },
