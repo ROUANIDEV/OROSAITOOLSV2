@@ -9,10 +9,7 @@ use super::types::{
     FoundationDiagnosticSeverity, FoundationRunOptions, FoundationRuntimeBlock,
     FoundationRuntimeTraceStatus, FunctionDefinition,
 };
-use super::values::{
-    array_of_strings, bool_value, coerce_typed_value, number_value, resolve_runtime_value,
-    string_value, value_to_key,
-};
+use super::values::{array_of_strings, coerce_typed_value, number_value, resolve_runtime_value, string_value, value_to_key};
 
 pub fn execute_block(
     context: &mut FoundationRuntimeContext,
@@ -155,30 +152,7 @@ fn expose_result_name(
     Some(name)
 }
 
-fn is_blank_config_value(value: &Value) -> bool {
-    match value {
-        Value::Null => true,
-        Value::String(text) => text.trim().is_empty(),
-        _ => false,
-    }
-}
 
-fn config_expression(context: &FoundationRuntimeContext, block: &FoundationRuntimeBlock, keys: &[&str]) -> Value {
-    for key in keys {
-        if let Some(value) = block.config.get(*key) {
-            if is_blank_config_value(value) {
-                continue;
-            }
-
-            return match value {
-                Value::String(expression) => evaluate_expression(context, expression),
-                other => resolve_runtime_value(context, other),
-            };
-        }
-    }
-
-    Value::Null
-}
 
 fn default_value_for_data_type(data_type: &str) -> Value {
     match data_type.trim().to_ascii_lowercase().as_str() {
@@ -213,41 +187,88 @@ fn config_expression_or_default(
     fallback
 }
 
-fn has_non_blank_config_value(config: &Map<String, Value>, keys: &[&str]) -> bool {
-    keys.iter()
-        .any(|key| config.get(*key).map(|value| !is_blank_config_value(value)).unwrap_or(false))
+
+
+fn orosa_is_blank_value(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::String(text) => text.trim().is_empty(),
+        _ => false,
+    }
 }
 
-fn numeric_config(
-    context: &FoundationRuntimeContext,
-    block: &FoundationRuntimeBlock,
-    keys: &[&str],
-    fallback: f64,
-) -> f64 {
-    for key in keys {
-        if !block.config.contains_key(*key) {
-            continue;
-        }
+fn orosa_value_as_number(value: &Value) -> Option<f64> {
+    match value {
+        Value::Number(number) => number.as_f64(),
+        Value::String(text) => text.trim().parse::<f64>().ok(),
+        Value::Bool(value) => Some(if *value { 1.0 } else { 0.0 }),
+        _ => None,
+    }
+}
 
-        let value = config_expression(context, block, &[*key]);
+fn orosa_config_value(context: &FoundationRuntimeContext, block: &FoundationRuntimeBlock, keys: &[&str]) -> Value {
+    for key in keys {
+        let Some(value) = block.config.get(*key) else { continue; };
+        if orosa_is_blank_value(value) { continue; }
         return match value {
-            Value::Number(value) => value.as_f64().unwrap_or(fallback),
-            Value::String(value) => value.trim().parse::<f64>().unwrap_or(fallback),
-            Value::Bool(value) => {
-                if value {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-            _ => fallback,
+            Value::String(expression) => evaluate_expression(context, expression),
+            other => resolve_runtime_value(context, other),
         };
     }
-
-    fallback
+    Value::Null
 }
 
+fn orosa_number_config(context: &FoundationRuntimeContext, block: &FoundationRuntimeBlock, key: &str, fallback: f64) -> f64 {
+    let Some(value) = block.config.get(key) else { return fallback; };
+    if orosa_is_blank_value(value) { return fallback; }
+    let resolved = match value {
+        Value::String(expression) => evaluate_expression(context, expression),
+        other => resolve_runtime_value(context, other),
+    };
+    orosa_value_as_number(&resolved).unwrap_or(fallback)
+}
 
+fn orosa_default_value_for_type(data_type: &str) -> Value {
+    match data_type.trim().to_ascii_lowercase().as_str() {
+        "number" => json!(0),
+        "boolean" | "bool" => json!(false),
+        "array" | "list" => json!([]),
+        "dictionary" | "object" | "json" => json!({}),
+        "string" | "text" => json!(""),
+        _ => Value::Null,
+    }
+}
+
+fn orosa_runtime_lookup(context: &FoundationRuntimeContext, name: &str) -> Option<Value> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() { return None; }
+    let unwrapped = trimmed
+        .strip_prefix("{{")
+        .and_then(|value| value.strip_suffix("}}"))
+        .map(str::trim)
+        .unwrap_or(trimmed)
+        .strip_prefix('$')
+        .unwrap_or(trimmed);
+    context.variables.get(unwrapped).cloned()
+        .or_else(|| context.constants.get(unwrapped).cloned())
+        .or_else(|| context.outputs.get(unwrapped).cloned())
+}
+
+fn orosa_resolve_output_value(context: &FoundationRuntimeContext, block: &FoundationRuntimeBlock, output_id: &str, data_type: &str) -> Value {
+    let configured = orosa_config_value(context, block, &["value", "expression"]);
+    if let Value::String(name) = &configured {
+        if let Some(value) = orosa_runtime_lookup(context, name) {
+            return value;
+        }
+    }
+    if !orosa_is_blank_value(&configured) {
+        return configured;
+    }
+    if let Some(value) = orosa_runtime_lookup(context, output_id) {
+        return value;
+    }
+    orosa_default_value_for_type(data_type)
+}
 fn execute_io_input(context: &mut FoundationRuntimeContext, block: &FoundationRuntimeBlock) {
     let input_id = string_value(&block.config, "inputId")
         .or_else(|| string_value(&block.config, "name"))
@@ -286,6 +307,8 @@ fn execute_io_input(context: &mut FoundationRuntimeContext, block: &FoundationRu
     }
 }
 
+
+
 fn execute_io_output(context: &mut FoundationRuntimeContext, block: &FoundationRuntimeBlock) {
     let output_id = string_value(&block.config, "outputId")
         .or_else(|| string_value(&block.config, "name"))
@@ -299,16 +322,11 @@ fn execute_io_output(context: &mut FoundationRuntimeContext, block: &FoundationR
         .or_else(|| string_value(&block.config, "type"))
         .unwrap_or_else(|| "unknown".to_string());
 
-    let raw_value = if block.config.contains_key("value") || block.config.contains_key("expression") {
-        config_expression(context, block, &["value", "expression"])
-    } else {
-        Value::Null
-    };
-
+    let raw_value = orosa_resolve_output_value(context, block, &output_id, &data_type);
     if let Some(value) = coerce_typed_value(context, &block.id, "value", &data_type, raw_value) {
         context.outputs.insert(
             block.id.clone(),
-            json!({ "outputId": output_id, "value": value }),
+            json!({ "outputId": output_id, "value": value.clone() }),
         );
         context.outputs.insert(output_id.clone(), value.clone());
         context.variables.insert(output_id.clone(), value);
@@ -319,6 +337,95 @@ fn execute_io_output(context: &mut FoundationRuntimeContext, block: &FoundationR
             format!("Wrote canvas output '{output_id}'."),
         );
     }
+}
+fn is_blank_config_value(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::String(text) => text.trim().is_empty(),
+        Value::Array(items) => items.is_empty(),
+        _ => false,
+    }
+}
+
+
+fn resolve_runtime_config_value(context: &FoundationRuntimeContext, raw: &Value) -> Value {
+    match raw {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                return Value::Null;
+            }
+
+            if let Some(value) = context.variables.get(trimmed) {
+                return value.clone();
+            }
+
+            if let Some(value) = context.outputs.get(trimmed) {
+                if let Some(inner) = value.get("value") {
+                    return inner.clone();
+                }
+                if let Some(inner) = value.get("result") {
+                    return inner.clone();
+                }
+                if let Some(inner) = value.get("assignedValue") {
+                    return inner.clone();
+                }
+                return value.clone();
+            }
+
+            if is_runtime_link_placeholder(raw) {
+                let key = trimmed
+                    .trim_start_matches("{{")
+                    .trim_start_matches("${")
+                    .trim_start_matches("@{")
+                    .trim_end_matches("}}")
+                    .trim_end_matches("}")
+                    .trim();
+
+                if let Some(value) = context.variables.get(key) {
+                    return value.clone();
+                }
+                if let Some(value) = context.outputs.get(key) {
+                    if let Some(inner) = value.get("value") {
+                        return inner.clone();
+                    }
+                    if let Some(inner) = value.get("result") {
+                        return inner.clone();
+                    }
+                    if let Some(inner) = value.get("assignedValue") {
+                        return inner.clone();
+                    }
+                    return value.clone();
+                }
+                return Value::Null;
+            }
+
+            raw.clone()
+        }
+        _ => raw.clone(),
+    }
+}
+
+
+fn is_runtime_link_placeholder(value: &Value) -> bool {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            trimmed.starts_with("{{") && trimmed.ends_with("}}")
+        }
+        _ => false,
+    }
+}
+
+fn config_expression(context: &FoundationRuntimeContext, block: &FoundationRuntimeBlock, keys: &[&str]) -> Value {
+    for key in keys {
+        if let Some(raw) = block.config.get(*key) {
+            if !is_blank_config_value(raw) {
+                return resolve_runtime_config_value(context, raw);
+            }
+        }
+    }
+    Value::Null
 }
 
 fn execute_variable_create(context: &mut FoundationRuntimeContext, block: &FoundationRuntimeBlock) {
@@ -378,135 +485,86 @@ fn execute_variable_assign(context: &mut FoundationRuntimeContext, block: &Found
     );
 }
 
-fn default_update_initial_value(operation: &str, data_type: &str) -> Value {
-    if matches!(data_type.trim().to_ascii_lowercase().as_str(), "number" | "unknown")
-        && matches!(operation, "multiply" | "times" | "*" | "x" | "divide" | "/" | "power" | "pow" | "^")
-    {
-        return json!(1);
-    }
-
-    default_value_for_data_type(data_type)
-}
 
 fn execute_variable_update(context: &mut FoundationRuntimeContext, block: &FoundationRuntimeBlock) {
-    let name = string_value(&block.config, "name").unwrap_or_else(|| "result".to_string());
+    let name = string_value(&block.config, "name")
+        .or_else(|| string_value(&block.config, "variableName"))
+        .or_else(|| string_value(&block.config, "reference"))
+        .unwrap_or_else(|| "result".to_string());
     if !validate_identifier(context, block, "name", &name) {
         return;
     }
 
     let operation = string_value(&block.config, "operation")
-        .or_else(|| string_value(&block.config, "operator"))
         .unwrap_or_else(|| "add".to_string())
         .trim()
         .to_ascii_lowercase();
-
-    let data_type = string_value(&block.config, "dataType").unwrap_or_else(|| "number".to_string());
-    let has_existing_variable = context.variables.contains_key(&name);
-    let has_manual_start_value = has_non_blank_config_value(
-        &block.config,
-        &["initialValue", "startValue", "defaultValue"],
-    );
-    let fallback_start_value = default_update_initial_value(&operation, &data_type);
-    let current_value = context.variables.get(&name).cloned().unwrap_or_else(|| {
-        config_expression_or_default(
-            context,
-            block,
-            &["initialValue", "startValue", "defaultValue"],
-            fallback_start_value.clone(),
-        )
+    let initial_value = orosa_config_value(context, block, &["initialValue", "startValue", "defaultValue"]);
+    let current_value = context.variables.get(&name).cloned().unwrap_or(initial_value);
+    let mut current_number = orosa_value_as_number(&current_value).unwrap_or_else(|| {
+        if matches!(operation.as_str(), "multiply" | "times" | "*" | "x" | "divide" | "/" | "power" | "pow" | "^") {
+            1.0
+        } else {
+            0.0
+        }
     });
-    let operand_value = config_expression(context, block, &["operand", "value", "right"]);
 
-    let mut current_number = match value_as_sort_number(&current_value) {
-        Some(value) => value,
-        None if !has_existing_variable && !has_manual_start_value => {
-            value_as_sort_number(&fallback_start_value).unwrap_or(0.0)
-        }
-        None => {
-            context.error(
-                Some(block.id.clone()),
-                Some("initialValue".to_string()),
-                "Stored value must be a number.",
-                Some("Use a number start value like 1 for multiplication/factorial or 0 for addition.".to_string()),
-            );
-            return;
-        }
-    };
-
-    if !has_existing_variable
-        && matches!(operation.as_str(), "multiply" | "times" | "*" | "x" | "divide" | "/" | "power" | "pow" | "^")
-        && current_number == 0.0
-    {
-        current_number = 1.0;
+    let operand_value = orosa_config_value(context, block, &["operand", "value", "amount", "delta"]);
+    if orosa_is_blank_value(&operand_value) {
+        let result_value = if current_number.is_finite() && current_number.fract() == 0.0 {
+            json!(current_number as i64)
+        } else {
+            json!(current_number)
+        };
+        context.variables.insert(name.clone(), result_value.clone());
+        context.outputs.insert(block.id.clone(), json!({ "value": result_value, "reference": name }));
+        context.trace(block.id.clone(), block.block_type.clone(), FoundationRuntimeTraceStatus::Executed, "Variable update had no operand and kept the current value.");
+        return;
     }
 
-    let Some(operand_number) = value_as_sort_number(&operand_value) else {
+    let Some(operand_number) = orosa_value_as_number(&operand_value) else {
         context.error(
             Some(block.id.clone()),
             Some("operand".to_string()),
             "Update value must be a number.",
-            Some("Connect a number input, loop index, or number-producing block.".to_string()),
+            Some("Connect a number input, loop index, variable, or number-producing block.".to_string()),
         );
         return;
     };
 
-    let result = match operation.as_str() {
+    current_number = match operation.as_str() {
         "add" | "+" => current_number + operand_number,
         "subtract" | "minus" | "-" => current_number - operand_number,
         "multiply" | "times" | "*" | "x" => current_number * operand_number,
         "divide" | "/" => {
             if operand_number == 0.0 {
-                context.error(
-                    Some(block.id.clone()),
-                    Some("operand".to_string()),
-                    "Cannot divide by zero.",
-                    Some("Connect a non-zero update value.".to_string()),
-                );
+                context.error(Some(block.id.clone()), Some("operand".to_string()), "Cannot divide by zero.", Some("Connect a non-zero update value.".to_string()));
                 return;
             }
             current_number / operand_number
         }
         "modulo" | "mod" | "%" => {
             if operand_number == 0.0 {
-                context.error(
-                    Some(block.id.clone()),
-                    Some("operand".to_string()),
-                    "Cannot calculate modulo by zero.",
-                    Some("Connect a non-zero update value.".to_string()),
-                );
+                context.error(Some(block.id.clone()), Some("operand".to_string()), "Cannot calculate modulo by zero.", Some("Connect a non-zero update value.".to_string()));
                 return;
             }
             current_number % operand_number
         }
         "power" | "pow" | "^" => current_number.powf(operand_number),
         _ => {
-            context.error(
-                Some(block.id.clone()),
-                Some("operation".to_string()),
-                format!("Unknown variable update operation '{operation}'."),
-                Some("Use add, subtract, multiply, divide, modulo, or power.".to_string()),
-            );
+            context.error(Some(block.id.clone()), Some("operation".to_string()), format!("Unknown variable update operation '{operation}'."), Some("Use add, subtract, multiply, divide, modulo, or power.".to_string()));
             return;
         }
     };
 
-    let result_value = json_number_result(result);
+    let result_value = if current_number.is_finite() && current_number.fract() == 0.0 {
+        json!(current_number as i64)
+    } else {
+        json!(current_number)
+    };
     context.variables.insert(name.clone(), result_value.clone());
-    context.outputs.insert(
-        block.id.clone(),
-        json!({
-            "value": result_value,
-            "reference": name,
-            "operation": operation,
-            "operand": operand_value,
-        }),
-    );
-    context.trace(
-        block.id.clone(),
-        block.block_type.clone(),
-        FoundationRuntimeTraceStatus::Executed,
-        format!("Updated variable '{name}'."),
-    );
+    context.outputs.insert(block.id.clone(), json!({ "value": result_value, "reference": name, "operation": operation, "operand": operand_value }));
+    context.trace(block.id.clone(), block.block_type.clone(), FoundationRuntimeTraceStatus::Executed, format!("Updated variable '{name}'."));
 }
 
 fn execute_constant_create(context: &mut FoundationRuntimeContext, block: &FoundationRuntimeBlock) {
@@ -1178,19 +1236,6 @@ fn execute_switch(
     );
 }
 
-fn loop_should_continue(index: i64, end: i64, step: i64, inclusive_end: bool) -> bool {
-    if step > 0 {
-        if inclusive_end {
-            index <= end
-        } else {
-            index < end
-        }
-    } else if inclusive_end {
-        index >= end
-    } else {
-        index > end
-    }
-}
 
 fn execute_for_loop(
     context: &mut FoundationRuntimeContext,
@@ -1205,11 +1250,14 @@ fn execute_for_loop(
         return;
     }
 
-    let start = numeric_config(context, block, &["start", "from"], 0.0) as i64;
-    let end = numeric_config(context, block, &["end", "to"], 0.0) as i64;
-    let step = numeric_config(context, block, &["step"], 1.0) as i64;
-    let inclusive_end = bool_value(&block.config, "inclusiveEnd", false)
-        || bool_value(&block.config, "inclusive", false);
+    let start = orosa_number_config(context, block, "start", 0.0) as i64;
+    let end = orosa_number_config(context, block, "end", 0.0) as i64;
+    let step = orosa_number_config(context, block, "step", 1.0) as i64;
+    let inclusive_end = match block.config.get("inclusiveEnd") {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::String(value)) => !matches!(value.trim().to_ascii_lowercase().as_str(), "false" | "0" | "no" | "off"),
+        _ => true,
+    };
 
     if step == 0 {
         context.error(
@@ -1224,8 +1272,13 @@ fn execute_for_loop(
     let body_ids = array_of_strings(&block.config, "bodyBlockIds");
     let mut iteration_count = 0usize;
     let mut index = start;
-
-    while loop_should_continue(index, end, step, inclusive_end) {
+    while if step > 0 {
+        if inclusive_end { index <= end } else { index < end }
+    } else if inclusive_end {
+        index >= end
+    } else {
+        index > end
+    } {
         if iteration_count >= options.max_loop_iterations {
             context.warning(
                 Some(block.id.clone()),
@@ -1235,16 +1288,12 @@ fn execute_for_loop(
             );
             break;
         }
-
         context.variables.insert(index_name.clone(), json!(index));
         execute_body_block_ids(context, &body_ids, block_lookup, options);
         index += step;
         iteration_count += 1;
     }
-
-    context
-        .outputs
-        .insert(block.id.clone(), json!({ "iterations": iteration_count, "index": index }));
+    context.outputs.insert(block.id.clone(), json!({ "iterations": iteration_count, "index": index }));
     context.trace(
         block.id.clone(),
         block.block_type.clone(),
