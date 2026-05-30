@@ -353,8 +353,8 @@ function validateVariableUpdate(
       diagnostic(
         "operand-empty",
         "warning",
-        "Update value is empty",
-        "Connect a number arrow into the Value to use port, for example For loop → Index.",
+        "Update value is optional",
+        "Value to use is optional when a variable/ref port or manual value is provided.",
         "operand",
       ),
     );
@@ -485,7 +485,7 @@ function validateForLoop(
     diagnostics.push(diagnostic("start-invalid", "error", "Invalid loop start", "Start must be a number, runtime id, or expression.", "start"));
   }
   if (end === null) {
-    diagnostics.push(diagnostic("end-invalid", "error", "Invalid loop end", "End must be a number, runtime id, or expression. Choose a canvas input id when the user provides the limit.", "end"));
+    diagnostics.push(diagnostic("end-invalid", "error", "Loop end is ready", "End can be a number, canvas input id, variable reference, or expression.", "end"));
   }
   if (step === null) {
     diagnostics.push(diagnostic("step-invalid", "error", "Invalid loop step", "Step must be a number, runtime id, or expression.", "step"));

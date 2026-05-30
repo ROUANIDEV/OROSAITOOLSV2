@@ -12,19 +12,6 @@ pub fn string_value(config: &Map<String, Value>, key: &str) -> Option<String> {
     .filter(|value| !value.is_empty())
 }
 
-pub fn bool_value(config: &Map<String, Value>, key: &str, fallback: bool) -> bool {
-    match config.get(key) {
-        Some(Value::Bool(value)) => *value,
-        Some(Value::String(value)) => match value.trim().to_ascii_lowercase().as_str() {
-            "true" | "1" | "yes" | "on" => true,
-            "false" | "0" | "no" | "off" => false,
-            _ => fallback,
-        },
-        Some(Value::Number(value)) => value.as_i64().map(|value| value != 0).unwrap_or(fallback),
-        _ => fallback,
-    }
-}
-
 pub fn number_value(config: &Map<String, Value>, key: &str, fallback: f64) -> f64 {
     match config.get(key) {
         Some(Value::Number(value)) => value.as_f64().unwrap_or(fallback),

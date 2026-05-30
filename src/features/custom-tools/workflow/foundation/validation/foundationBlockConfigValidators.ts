@@ -76,6 +76,24 @@ function readNumber(
     : undefined;
 }
 
+function isRuntimeConfigValue(value: unknown): boolean {
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "boolean") return true;
+  if (typeof value === "string") return value.trim().length > 0;
+  return false;
+}
+
+function readRuntimeNumberLike(config: Record<string, unknown>, key: string): { present: boolean; numeric?: number } {
+  const value = config[key];
+  if (!isRuntimeConfigValue(value)) return { present: false };
+  if (typeof value === "number" && Number.isFinite(value)) return { present: true, numeric: value };
+  if (typeof value === "boolean") return { present: true, numeric: value ? 1 : 0 };
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? { present: true, numeric: parsed } : { present: true };
+  }
+  return { present: true };
+}
 function readBoolean(
   config: Record<string, unknown>,
   key: string,
@@ -514,32 +532,26 @@ function validateForLoop(
   context: FoundationBlockConfigValidationContext,
 ) {
   requireIdentifier(diagnostics, context, "indexName", "Index variable name");
+  const start = readRuntimeNumberLike(context.config, "start");
+  const end = readRuntimeNumberLike(context.config, "end");
+  const step = readRuntimeNumberLike(context.config, "step");
 
-  const start = readNumber(context.config, "start");
-  const end = readNumber(context.config, "end");
-  const step = readNumber(context.config, "step");
-
-  if (start === undefined) {
-    addDiagnostic(diagnostics, context, "warning", "start", "Loop start should be a number.");
-  }
-
-  if (end === undefined) {
-    addDiagnostic(diagnostics, context, "warning", "end", "Loop end should be a number.");
-  }
-
-  if (step === 0) {
+  if (!end.present) {
     addDiagnostic(
       diagnostics,
       context,
-      "error",
-      "step",
-      "Loop step cannot be zero.",
+      "warning",
+      "end",
+      "Loop end is empty.",
+      "Use a number, canvas input id, variable reference, or expression.",
     );
   }
 
-  if (step === undefined) {
-    addDiagnostic(diagnostics, context, "warning", "step", "Loop step should be a number.");
+  if (step.present && step.numeric === 0) {
+    addDiagnostic(diagnostics, context, "error", "step", "Loop step cannot be zero.");
   }
+
+  void start;
 }
 
 function validateForEachLoop(
