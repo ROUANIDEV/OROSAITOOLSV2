@@ -1,20 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { CustomToolBlock } from "../domain/customToolTypes";
+import { materializeArrowDataLinks } from "../workflow/io/canvasWorkflowIo";
 
-export const FOUNDATION_WORKFLOW_RUN_ORDER_LABEL =
-  "arrow-linked dependency order";
+export const FOUNDATION_WORKFLOW_RUN_ORDER_LABEL = "arrow-linked dependency order";
 export const FOUNDATION_WORKFLOW_FALLBACK_ORDER_LABEL =
   "current workflow block array order";
 export const FOUNDATION_WORKFLOW_CYCLE_ORDER_LABEL =
   "arrow-linked dependency order with cycle fallback";
 
 export const foundationWorkflowBlockTypes = [
+  "io.input",
+  "io.output",
   "variable.create",
   "variable.assign",
+  "variable.update",
   "constant.create",
   "expression.value",
   "expression.template",
+  "math.operation",
+  "logic.compare",
   "scope.global",
   "scope.local",
   "function.define",
@@ -39,12 +44,14 @@ const foundationWorkflowBlockTypeSet = new Set<string>(
   foundationWorkflowBlockTypes,
 );
 
+type UnknownRecord = Record<string, unknown>;
+
 export type FoundationRuntimeBlockPayload = {
   id: string;
   type: string;
   label: string;
   description?: string;
-  config: Record<string, unknown>;
+  config: UnknownRecord;
 };
 
 export type FoundationWorkflowConnectionLike = {
@@ -64,7 +71,7 @@ export type FoundationWorkflowRunOptions = {
 
 export type FoundationWorkflowRunPayload = {
   blocks: FoundationRuntimeBlockPayload[];
-  inputs: Record<string, unknown>;
+  inputs: UnknownRecord;
   options: FoundationWorkflowRunOptions;
 };
 
@@ -125,9 +132,9 @@ export type FoundationWorkflowRunResult = {
   warningCount?: number;
   warning_count?: number;
   diagnostics?: FoundationRuntimeDiagnostic[];
-  variables?: Record<string, unknown>;
-  constants?: Record<string, unknown>;
-  outputs?: Record<string, unknown>;
+  variables?: UnknownRecord;
+  constants?: UnknownRecord;
+  outputs?: UnknownRecord;
   functions?: unknown[];
   trace?: FoundationRuntimeTraceItem[];
   steps?: FoundationRuntimeTraceItem[];
@@ -211,6 +218,60 @@ export type FoundationWorkflowOutputSummary = {
   explanation: string;
 };
 
+export type FoundationArrowInputSuggestion = {
+  connectionId: string;
+  sourceBlockId: string;
+  targetBlockId: string;
+  sourceLabel: string;
+  targetLabel: string;
+  sourceType: string;
+  targetType: string;
+  sourceName: string;
+  sourceOutputLabel: string;
+  sourceOutputValue: unknown;
+  sourceOutputDisplayValue: string;
+  token: string;
+  targetField: string;
+  targetFieldLabel: string;
+  isApplied: boolean;
+  currentValue: unknown;
+};
+
+type LinkedInputConfigEntry = {
+  connectionId?: string;
+  sourceBlockId?: string;
+  targetBlockId?: string;
+  token?: string;
+  targetField?: string;
+  enabled?: boolean;
+};
+
+const foundationTargetFieldByType: Record<string, string[]> = {
+  "io.input": ["inputId", "testValue", "defaultValue"],
+  "io.output": ["expression", "value"],
+  "expression.template": ["template"],
+  "expression.value": ["expression", "value"],
+  "variable.assign": ["value", "expression", "initialValue"],
+  "variable.update": ["operand", "initialValue", "value"],
+  "math.operation": ["left", "right", "resultName"],
+  "logic.compare": ["left", "right", "resultName"],
+  "variable.create": ["initialValue", "value"],
+  "constant.create": ["value", "initialValue"],
+  "function.define": ["bodyBlockIds", "returnExpression"],
+  "function.call": ["arguments", "args", "input", "value"],
+  "control.if": ["condition", "expression"],
+  "control.switch": ["expression", "value"],
+  "loop.for": ["end", "start", "step", "from", "to", "bodyBlockIds", "value"],
+  "loop.forEach": ["collection", "items", "bodyBlockIds", "value"],
+  "loop.while": ["condition", "expression", "bodyBlockIds"],
+  "collection.array": ["items", "value"],
+  "collection.list": ["items", "value"],
+  "collection.dictionary": ["entries", "value"],
+  "collection.get": ["key", "collection", "value"],
+  "collection.set": ["value", "key", "collection"],
+  "collection.sort": ["collection", "items", "value"],
+};
+
 export function isFoundationWorkflowBlock(block: CustomToolBlock) {
   return foundationWorkflowBlockTypeSet.has(String(block.type));
 }
@@ -239,9 +300,8 @@ export function partitionFoundationWorkflowBlocks(blocks: CustomToolBlock[]) {
 
 function normalizeBlockConfig(config: CustomToolBlock["config"]) {
   if (config && typeof config === "object" && !Array.isArray(config)) {
-    return config as Record<string, unknown>;
+    return config as UnknownRecord;
   }
-
   return {};
 }
 
@@ -257,11 +317,10 @@ function toRuntimeBlockPayload(
   };
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
+function asRecord(value: unknown): UnknownRecord {
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
+    return value as UnknownRecord;
   }
-
   return {};
 }
 
@@ -317,7 +376,6 @@ export function createFoundationWorkflowExecutionPlan(
   const originalIndex = new Map(
     foundationBlocks.map((block, index) => [block.id, index]),
   );
-
   const edges: FoundationWorkflowExecutionEdge[] = [];
   const ignoredEdges: FoundationWorkflowExecutionEdge[] = [];
 
@@ -390,7 +448,6 @@ export function createFoundationWorkflowExecutionPlan(
 
   const incomingCount = new Map<string, number>();
   const outgoing = new Map<string, string[]>();
-
   for (const block of foundationBlocks) {
     incomingCount.set(block.id, 0);
     outgoing.set(block.id, []);
@@ -414,14 +471,12 @@ export function createFoundationWorkflowExecutionPlan(
   while (queue.length > 0) {
     const blockId = queue.shift();
     if (!blockId) continue;
-
     orderedIds.push(blockId);
 
     const children = [...(outgoing.get(blockId) ?? [])].sort(sortByOriginalOrder);
     for (const childId of children) {
       const nextCount = Math.max(0, (incomingCount.get(childId) ?? 0) - 1);
       incomingCount.set(childId, nextCount);
-
       if (nextCount === 0) {
         queue.push(childId);
         queue.sort(sortByOriginalOrder);
@@ -492,17 +547,163 @@ export function normalizeFoundationWorkflowRunResult(
     variables: asRecord(raw.variables),
     constants: asRecord(raw.constants),
     outputs: asRecord(raw.outputs),
-    functions: asArray<unknown>(raw.functions),
+    functions: asArray(raw.functions),
     trace: asArray<FoundationRuntimeTraceItem>(raw.trace),
     steps: asArray<FoundationRuntimeTraceItem>(raw.steps),
     summary: summary as FoundationRunResultSummary,
   };
 }
 
+
+function getBodyFieldForConnection(
+  sourceBlock: CustomToolBlock,
+  connection: FoundationWorkflowConnectionLike,
+) {
+  const sourceType = String(sourceBlock.type);
+  const fromPortId = connection.fromPortId ?? "output";
+
+  if (
+    (sourceType === "loop.for" ||
+      sourceType === "loop.forEach" ||
+      sourceType === "loop.while") &&
+    (fromPortId === "iteration" || fromPortId === "body")
+  ) {
+    return "bodyBlockIds";
+  }
+
+  if (sourceType === "function.define" && fromPortId === "body") {
+    return "bodyBlockIds";
+  }
+
+  if (sourceType === "control.if" && fromPortId === "true") {
+    return "trueBodyBlockIds";
+  }
+
+  if (sourceType === "control.if" && fromPortId === "false") {
+    return "falseBodyBlockIds";
+  }
+
+  if (sourceType === "control.switch" && fromPortId === "default") {
+    return "defaultBodyBlockIds";
+  }
+
+  return null;
+}
+
+function isBodyControlPort(portId: string | undefined) {
+  return (
+    portId === "iteration" ||
+    portId === "body" ||
+    portId === "true" ||
+    portId === "false" ||
+    portId === "matched" ||
+    portId === "default"
+  );
+}
+
+function collectBodyChain(
+  startBlockId: string,
+  blockById: Map<string, CustomToolBlock>,
+  connections: FoundationWorkflowConnectionLike[],
+  containerBlockId: string,
+) {
+  const result: string[] = [];
+  const visited = new Set<string>();
+  let currentBlockId: string | undefined = startBlockId;
+
+  while (currentBlockId && !visited.has(currentBlockId)) {
+    if (currentBlockId === containerBlockId) break;
+    const currentBlock = blockById.get(currentBlockId);
+    if (!currentBlock || !isFoundationWorkflowBlock(currentBlock)) break;
+
+    visited.add(currentBlockId);
+    result.push(currentBlockId);
+
+    const nextConnection:any = connections.find((connection) => {
+      return (
+        connection.fromBlockId === currentBlockId &&
+        connection.toBlockId !== containerBlockId &&
+        !isBodyControlPort(connection.fromPortId) &&
+        (connection.fromPortId === "next" || connection.toPortId === "run") &&
+        Boolean(blockById.get(connection.toBlockId))
+      );
+    });
+
+    currentBlockId = nextConnection?.toBlockId;
+  }
+
+  return result;
+}
+
+function mergeBodyIds(currentValue: unknown, newIds: string[]) {
+  const currentIds = Array.isArray(currentValue)
+    ? currentValue.filter((value): value is string => typeof value === "string")
+    : [];
+  return [...new Set([...currentIds, ...newIds])];
+}
+
+function applyBodyLinksToBlocks(
+  blocks: CustomToolBlock[],
+  connections: FoundationWorkflowConnectionLike[],
+) {
+  if (connections.length === 0) return blocks;
+
+  const blockById = new Map(blocks.map((block) => [block.id, block]));
+  const configByBlockId = new Map<string, UnknownRecord>();
+  const bodyOnlyBlockIds = new Set<string>();
+
+  for (const connection of connections) {
+    const sourceBlock = blockById.get(connection.fromBlockId);
+    const targetBlock = blockById.get(connection.toBlockId);
+    if (!sourceBlock || !targetBlock) continue;
+    if (!isFoundationWorkflowBlock(sourceBlock) || !isFoundationWorkflowBlock(targetBlock)) {
+      continue;
+    }
+
+    const bodyField = getBodyFieldForConnection(sourceBlock, connection);
+    if (!bodyField) continue;
+
+    const targetIds = collectBodyChain(
+      connection.toBlockId,
+      blockById,
+      connections,
+      sourceBlock.id,
+    );
+    if (targetIds.length === 0) continue;
+
+    targetIds.forEach((targetId) => bodyOnlyBlockIds.add(targetId));
+
+    const currentConfig =
+      configByBlockId.get(sourceBlock.id) ?? normalizeBlockConfig(sourceBlock.config);
+    configByBlockId.set(sourceBlock.id, {
+      ...currentConfig,
+      [bodyField]: mergeBodyIds(currentConfig[bodyField], targetIds),
+    });
+  }
+
+  if (configByBlockId.size === 0 && bodyOnlyBlockIds.size === 0) return blocks;
+
+  return blocks.map((block) => {
+    const nextConfig = configByBlockId.get(block.id) ?? normalizeBlockConfig(block.config);
+    if (bodyOnlyBlockIds.has(block.id)) {
+      return {
+        ...block,
+        config: {
+          ...nextConfig,
+          __workflowRole: "body",
+          __skipTopLevel: true,
+        },
+      };
+    }
+    return configByBlockId.has(block.id) ? { ...block, config: nextConfig } : block;
+  });
+}
+
 export function createFoundationWorkflowRunPayload(
   blocks: CustomToolBlock[],
   options: FoundationWorkflowRunOptions = {},
   connections: FoundationWorkflowConnectionLike[] = [],
+  inputs: UnknownRecord = {},
 ): {
   payload: FoundationWorkflowRunPayload;
   foundationBlocks: FoundationRuntimeBlockPayload[];
@@ -515,7 +716,9 @@ export function createFoundationWorkflowRunPayload(
   const orderedBlocks = executionPlan.orderedFoundationBlockIds
     .map((blockId) => blockById.get(blockId))
     .filter((block): block is CustomToolBlock => Boolean(block));
-  const foundationBlocks = orderedBlocks.map(toRuntimeBlockPayload);
+  const blocksWithDataLinks = materializeArrowDataLinks(orderedBlocks, connections);
+  const blocksWithBodyLinks = applyBodyLinksToBlocks(blocksWithDataLinks, connections);
+  const foundationBlocks = blocksWithBodyLinks.map(toRuntimeBlockPayload);
 
   return {
     foundationBlocks,
@@ -523,7 +726,7 @@ export function createFoundationWorkflowRunPayload(
     executionPlan,
     payload: {
       blocks: foundationBlocks,
-      inputs: {},
+      inputs: asRecord(inputs),
       options: {
         dryRun: options.dryRun ?? false,
         failFast: options.failFast ?? false,
@@ -537,12 +740,12 @@ export async function runFoundationWorkflowFromBlocks(
   blocks: CustomToolBlock[],
   options: FoundationWorkflowRunOptions = {},
   connections: FoundationWorkflowConnectionLike[] = [],
+  inputs: UnknownRecord = {},
 ): Promise<FoundationWorkflowRunReport> {
   const startedAt = new Date().toISOString();
   const { payload, foundationBlocks, skippedBlocks, executionPlan } =
-    createFoundationWorkflowRunPayload(blocks, options, connections);
-
-  const rawResult = await invoke<unknown>("custom_tool_foundation_run", {
+    createFoundationWorkflowRunPayload(blocks, options, connections, inputs);
+  const rawResult = await invoke("custom_tool_foundation_run", {
     payload,
   });
 
@@ -561,7 +764,6 @@ export async function runFoundationWorkflowFromBlocks(
 export function toFoundationRunErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
-
   try {
     return JSON.stringify(error);
   } catch {
@@ -573,19 +775,18 @@ function getBlockMeta(report: FoundationWorkflowRunReport, blockId: string) {
   return report.foundationBlocks.find((block) => block.id === blockId);
 }
 
-function outputPrimaryValue(rawOutput: unknown): {
-  key: string;
-  value: unknown;
-} {
+function outputPrimaryValue(rawOutput: unknown): { key: string; value: unknown } {
   if (!rawOutput || typeof rawOutput !== "object" || Array.isArray(rawOutput)) {
     return { key: "value", value: rawOutput };
   }
 
-  const output = rawOutput as Record<string, unknown>;
+  const output = rawOutput as UnknownRecord;
   const preferredKeys = [
     "text",
     "result",
+    "output",
     "value",
+    "input",
     "assignedValue",
     "constant",
     "sorted",
@@ -607,18 +808,14 @@ function outputPrimaryValue(rawOutput: unknown): {
 
   const firstEntry = Object.entries(output)[0];
   if (firstEntry) return { key: firstEntry[0], value: firstEntry[1] };
-
   return { key: "value", value: rawOutput };
 }
 
 export function formatFoundationOutputValue(value: unknown): string {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (value === null) return "null";
   if (typeof value === "undefined") return "undefined";
-
   try {
     return JSON.stringify(value, null, 2);
   } catch {
@@ -658,10 +855,8 @@ export function getFoundationFinalOutput(
   report: FoundationWorkflowRunReport,
 ): FoundationFinalOutput {
   const timeline = createFoundationOutputTimeline(report);
-
   for (const item of [...timeline].reverse()) {
     if (typeof item.primaryValue === "undefined") continue;
-
     return {
       blockId: item.blockId,
       blockType: item.blockType,
@@ -671,10 +866,8 @@ export function getFoundationFinalOutput(
       displayValue: item.displayValue,
     };
   }
-
   return null;
 }
-
 
 function countWorkflowEdgesByBlockId(edges: FoundationWorkflowExecutionEdge[]) {
   const incoming = new Map<string, number>();
@@ -688,6 +881,12 @@ function countWorkflowEdgesByBlockId(edges: FoundationWorkflowExecutionEdge[]) {
   return { incoming, outgoing };
 }
 
+function isUserOutputBlock(report: FoundationWorkflowRunReport, blockId: string) {
+  return report.foundationBlocks.some((block) => {
+    return block.id === blockId && block.type === "io.output";
+  });
+}
+
 export function createFoundationWorkflowOutputSummary(
   report: FoundationWorkflowRunReport,
 ): FoundationWorkflowOutputSummary {
@@ -695,10 +894,36 @@ export function createFoundationWorkflowOutputSummary(
   const activeEdges = report.executionPlan.edges;
   const hasArrowGraph = activeEdges.length > 0;
   const { incoming, outgoing } = countWorkflowEdgesByBlockId(activeEdges);
+  const hasExplicitUserOutput = report.foundationBlocks.some(
+    (block) => block.type === "io.output",
+  );
 
   const allOutputs: FoundationWorkflowOutputItem[] = timeline.map((item) => {
     const incomingArrowCount = incoming.get(item.blockId) ?? 0;
     const outgoingArrowCount = outgoing.get(item.blockId) ?? 0;
+    const userOutput = isUserOutputBlock(report, item.blockId);
+
+    if (userOutput) {
+      return {
+        ...item,
+        incomingArrowCount,
+        outgoingArrowCount,
+        role: "terminal",
+        isWorkflowOutput: true,
+        reason: "This is an Output block, so it is shown as the user-facing workflow result.",
+      };
+    }
+
+    if (hasExplicitUserOutput) {
+      return {
+        ...item,
+        incomingArrowCount,
+        outgoingArrowCount,
+        role: "intermediate",
+        isWorkflowOutput: false,
+        reason: "An Output block exists, so this value is treated as intermediate data.",
+      };
+    }
 
     if (!hasArrowGraph) {
       return {
@@ -707,8 +932,7 @@ export function createFoundationWorkflowOutputSummary(
         outgoingArrowCount,
         role: "blockOrder",
         isWorkflowOutput: true,
-        reason:
-          "No foundation arrows were connected, so the UI shows every block output instead of guessing one final value.",
+        reason: "No arrows and no Output block were found, so this emitted value is shown.",
       };
     }
 
@@ -721,8 +945,8 @@ export function createFoundationWorkflowOutputSummary(
         isWorkflowOutput: outgoingArrowCount === 0,
         reason:
           outgoingArrowCount === 0
-            ? "This block has no outgoing foundation arrow, so it is a workflow output."
-            : "A cycle exists in the arrow graph. This value is shown as an intermediate/cycle output, not a guessed final value.",
+            ? "This block has no outgoing arrow, so it is shown as a fallback output."
+            : "A cycle exists in the arrow graph. This value is intermediate/cycle data.",
       };
     }
 
@@ -734,7 +958,7 @@ export function createFoundationWorkflowOutputSummary(
       isWorkflowOutput: outgoingArrowCount === 0,
       reason:
         outgoingArrowCount === 0
-          ? "This block has no outgoing foundation arrow, so it is a workflow output."
+          ? "This block has no outgoing arrow, so it is shown as a fallback output."
           : "This output feeds another block through an arrow, so it is intermediate data.",
     };
   });
@@ -747,11 +971,19 @@ export function createFoundationWorkflowOutputSummary(
       workflowOutputs: allOutputs,
       intermediateOutputs: [],
       allOutputs,
-      modeLabel: report.executionPlan.hasCycle
-        ? "cycle fallback outputs"
-        : "all emitted outputs",
+      modeLabel: "all emitted outputs",
       explanation:
-        "No clear terminal output block was found, so every emitted block output is shown. Add arrows that end at the block(s) you want as workflow outputs.",
+        "No Output block produced a value, so every emitted block value is shown for debugging.",
+    };
+  }
+
+  if (hasExplicitUserOutput) {
+    return {
+      workflowOutputs,
+      intermediateOutputs,
+      allOutputs,
+      modeLabel: "user output blocks",
+      explanation: "Only Output blocks are shown as final user results. Other block values remain intermediate.",
     };
   }
 
@@ -761,8 +993,7 @@ export function createFoundationWorkflowOutputSummary(
       intermediateOutputs,
       allOutputs,
       modeLabel: "block-order outputs",
-      explanation:
-        "No foundation arrows are connected. The workflow cannot know which block is final, so it shows all emitted outputs.",
+      explanation: "No arrows are connected, so every emitted value is shown.",
     };
   }
 
@@ -772,104 +1003,55 @@ export function createFoundationWorkflowOutputSummary(
     allOutputs,
     modeLabel: "terminal arrow outputs",
     explanation:
-      "Workflow outputs are terminal blocks in the arrow graph: blocks that produced a value and do not feed another foundation block.",
+      "No Output block exists, so terminal blocks in the arrow graph are shown as fallback results.",
   };
 }
-
-export type FoundationArrowInputSuggestion = {
-  connectionId: string;
-  sourceBlockId: string;
-  targetBlockId: string;
-  sourceLabel: string;
-  targetLabel: string;
-  sourceType: string;
-  targetType: string;
-  sourceName: string;
-  sourceOutputLabel: string;
-  sourceOutputValue: unknown;
-  sourceOutputDisplayValue: string;
-  token: string;
-  targetField: string;
-  targetFieldLabel: string;
-  isApplied: boolean;
-  currentValue: unknown;
-};
-
-type LinkedInputConfigEntry = {
-  connectionId?: string;
-  sourceBlockId?: string;
-  targetBlockId?: string;
-  token?: string;
-  targetField?: string;
-  enabled?: boolean;
-};
-
-const foundationTargetFieldByType: Record<string, string[]> = {
-  "expression.template": ["template"],
-  "expression.value": ["expression", "value"],
-  "variable.assign": ["value", "expression", "initialValue"],
-  "variable.create": ["initialValue", "value"],
-  "constant.create": ["value", "initialValue"],
-  "function.call": ["arguments", "args", "input", "value"],
-  "control.if": ["condition", "expression"],
-  "control.switch": ["expression", "value"],
-  "loop.for": ["start", "from", "value"],
-  "loop.forEach": ["collection", "items", "value"],
-  "loop.while": ["condition", "expression"],
-  "collection.array": ["items", "value"],
-  "collection.list": ["items", "value"],
-  "collection.dictionary": ["entries", "value"],
-  "collection.get": ["key", "collection", "value"],
-  "collection.set": ["value", "key", "collection"],
-  "collection.sort": ["collection", "items", "value"],
-};
 
 function normalizeLinkedName(value: string) {
   const normalized = value
     .trim()
     .replace(/[^A-Za-z0-9_]+/g, "_")
     .replace(/^_+|_+$/g, "");
-
   if (!normalized) return "value";
   if (/^[0-9]/.test(normalized)) return `value_${normalized}`;
   return normalized;
 }
 
-function getConfigString(config: Record<string, unknown>, keys: string[]) {
+function getConfigString(config: UnknownRecord, keys: string[]) {
   for (const key of keys) {
     const value = config[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
-
   return "";
 }
 
 function getFoundationArrowSourceName(block: CustomToolBlock) {
   const config = normalizeBlockConfig(block.config);
-
   const explicitName = getConfigString(config, [
+    "inputId",
+    "outputId",
+    "assignTo",
     "name",
     "variableName",
     "constantName",
     "functionName",
+    "resultName",
     "outputName",
     "reference",
     "key",
   ]);
 
   if (explicitName) return normalizeLinkedName(explicitName);
-
   if (block.label && block.label.trim()) return normalizeLinkedName(block.label);
-
   return normalizeLinkedName(String(block.type));
 }
 
 function getFoundationArrowInputToken(sourceBlock: CustomToolBlock) {
-  return `{{${getFoundationArrowSourceName(sourceBlock)}}}`;
+  return getFoundationArrowSourceName(sourceBlock);
 }
 
 function getFirstConfigValue(
-  config: Record<string, unknown>,
+  config: UnknownRecord,
   keys: string[],
 ): { key: string; value: unknown } | null {
   for (const key of keys) {
@@ -877,8 +1059,14 @@ function getFirstConfigValue(
       return { key, value: config[key] };
     }
   }
-
   return null;
+}
+
+function getTargetFieldLabel(field: string) {
+  return field
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^\w/, (match) => match.toUpperCase());
 }
 
 function getFoundationSourceOutput(block: CustomToolBlock): {
@@ -888,49 +1076,48 @@ function getFoundationSourceOutput(block: CustomToolBlock): {
   const config = normalizeBlockConfig(block.config);
   const blockType = String(block.type);
 
-  if (blockType === "variable.create" || blockType === "variable.assign") {
-    const output = getFirstConfigValue(config, [
-      "initialValue",
-      "value",
-      "expression",
-    ]);
+  if (blockType === "io.input") {
+    const output = getFirstConfigValue(config, ["testValue", "defaultValue", "inputId"]);
+    return { label: "Canvas input", value: output?.value };
+  }
 
-    return {
-      label: "Variable value",
-      value: output?.value,
-    };
+  if (blockType === "io.output") {
+    const output = getFirstConfigValue(config, ["expression", "value", "outputId"]);
+    return { label: "Canvas output", value: output?.value };
+  }
+
+  if (blockType === "variable.create" || blockType === "variable.assign") {
+    const output = getFirstConfigValue(config, ["initialValue", "value", "expression"]);
+    return { label: "Variable value", value: output?.value };
   }
 
   if (blockType === "constant.create") {
     const output = getFirstConfigValue(config, ["value", "initialValue"]);
-
-    return {
-      label: "Constant value",
-      value: output?.value,
-    };
+    return { label: "Constant value", value: output?.value };
   }
 
   if (blockType === "expression.template") {
     const output = getFirstConfigValue(config, ["template", "text", "value"]);
-
-    return {
-      label: "Template text",
-      value: output?.value,
-    };
+    return { label: "Template text", value: output?.value };
   }
 
   if (blockType === "expression.value") {
     const output = getFirstConfigValue(config, ["expression", "value"]);
+    return { label: "Expression value", value: output?.value };
+  }
 
-    return {
-      label: "Expression value",
-      value: output?.value,
-    };
+  if (blockType === "math.operation") {
+    const output = getFirstConfigValue(config, ["resultName", "left", "right"]);
+    return { label: "Math result", value: output?.value };
+  }
+
+  if (blockType === "logic.compare") {
+    const output = getFirstConfigValue(config, ["resultName", "left", "right"]);
+    return { label: "Comparison result", value: output?.value };
   }
 
   if (blockType === "collection.array" || blockType === "collection.list") {
     const output = getFirstConfigValue(config, ["items", "value"]);
-
     return {
       label: blockType === "collection.array" ? "Array items" : "List items",
       value: output?.value,
@@ -939,20 +1126,12 @@ function getFoundationSourceOutput(block: CustomToolBlock): {
 
   if (blockType === "collection.sort") {
     const output = getFirstConfigValue(config, ["collection", "items", "value"]);
-
-    return {
-      label: "Sorted collection input",
-      value: output?.value,
-    };
+    return { label: "Sorted collection input", value: output?.value };
   }
 
   if (blockType === "collection.dictionary") {
     const output = getFirstConfigValue(config, ["entries", "value"]);
-
-    return {
-      label: "Dictionary entries",
-      value: output?.value,
-    };
+    return { label: "Dictionary entries", value: output?.value };
   }
 
   const fallback = getFirstConfigValue(config, [
@@ -963,7 +1142,6 @@ function getFoundationSourceOutput(block: CustomToolBlock): {
     "template",
     "name",
   ]);
-
   return {
     label: fallback?.key ? getTargetFieldLabel(fallback.key) : "Output",
     value: fallback?.value,
@@ -994,11 +1172,36 @@ function getTargetField(block: CustomToolBlock) {
   return preferredFields[0] ?? "linkedInput";
 }
 
-function getTargetFieldLabel(field: string) {
-  return field
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/^\w/, (match) => match.toUpperCase());
+
+function getTargetFieldForConnection(
+  block: CustomToolBlock,
+  connection: FoundationWorkflowConnectionLike,
+) {
+  const toPortId = connection.toPortId;
+  if (!toPortId || toPortId === "run" || toPortId === "next") return "";
+  const preferredFields = foundationTargetFieldByType[String(block.type)] ?? [];
+  if (toPortId && preferredFields.includes(toPortId)) return toPortId;
+  if (
+    toPortId &&
+    [
+      "start",
+      "end",
+      "step",
+      "condition",
+      "expression",
+      "value",
+      "initialValue",
+      "collection",
+      "key",
+      "arguments",
+      "args",
+      "left",
+      "right",
+    ].includes(toPortId)
+  ) {
+    return toPortId;
+  }
+  return getTargetField(block);
 }
 
 function getConnectionKey(connection: FoundationWorkflowConnectionLike) {
@@ -1010,14 +1213,14 @@ function getConnectionKey(connection: FoundationWorkflowConnectionLike) {
   );
 }
 
-function getLinkedInputs(config: Record<string, unknown>) {
+function getLinkedInputs(config: UnknownRecord) {
   return Array.isArray(config.linkedInputs)
     ? (config.linkedInputs as LinkedInputConfigEntry[])
     : [];
 }
 
 function isTokenApplied(
-  config: Record<string, unknown>,
+  config: UnknownRecord,
   field: string,
   token: string,
   connectionId: string,
@@ -1043,14 +1246,14 @@ export function createFoundationArrowInputSuggestions(
   return connections.flatMap((connection) => {
     const sourceBlock = blockById.get(connection.fromBlockId);
     const targetBlock = blockById.get(connection.toBlockId);
-
     if (!sourceBlock || !targetBlock) return [];
     if (!isFoundationWorkflowBlock(sourceBlock)) return [];
     if (!isFoundationWorkflowBlock(targetBlock)) return [];
     if (sourceBlock.id === targetBlock.id) return [];
 
     const targetConfig = normalizeBlockConfig(targetBlock.config);
-    const targetField = getTargetField(targetBlock);
+    const targetField = getTargetFieldForConnection(targetBlock, connection);
+    if (!targetField) return [];
     const token = getFoundationArrowInputToken(sourceBlock);
     const connectionId = getConnectionKey(connection);
     const sourceOutput = getFoundationSourceOutput(sourceBlock);
@@ -1067,9 +1270,10 @@ export function createFoundationArrowInputSuggestions(
         sourceName: getFoundationArrowSourceName(sourceBlock),
         sourceOutputLabel: sourceOutput.label,
         sourceOutputValue: sourceOutput.value,
-        sourceOutputDisplayValue: typeof sourceOutput.value === "undefined"
-          ? "No preview value yet"
-          : formatFoundationOutputValue(sourceOutput.value),
+        sourceOutputDisplayValue:
+          typeof sourceOutput.value === "undefined"
+            ? "No preview value yet"
+            : formatFoundationOutputValue(sourceOutput.value),
         token,
         targetField,
         targetFieldLabel: getTargetFieldLabel(targetField),
@@ -1081,7 +1285,7 @@ export function createFoundationArrowInputSuggestions(
 }
 
 function upsertLinkedInputEntry(
-  config: Record<string, unknown>,
+  config: UnknownRecord,
   suggestion: FoundationArrowInputSuggestion,
   enabled: boolean,
 ) {
@@ -1104,23 +1308,18 @@ function upsertLinkedInputEntry(
 
 function applyTokenToValue(value: unknown, token: string) {
   if (typeof value === "string") {
-    if (value.includes(token)) return value;
     if (!value.trim()) return token;
-    return `${value.trimEnd()} ${token}`;
+    if (value.trim() === token) return value;
+    return token;
   }
 
   if (typeof value === "undefined" || value === null) return token;
-
-  return value;
+  return token;
 }
 
 function removeTokenFromValue(value: unknown, token: string) {
   if (typeof value !== "string") return value;
-
-  return value
-    .replace(token, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  return value.replace(token, "").replace(/\s{2,}/g, " ").trim();
 }
 
 export function applyFoundationArrowInputToBlocks(
@@ -1148,23 +1347,15 @@ export function applyFoundationArrowInputToBlocks(
     if (!blockSuggestions || blockSuggestions.length === 0) return block;
 
     const nextConfig = { ...normalizeBlockConfig(block.config) };
-
     for (const suggestion of blockSuggestions) {
       nextConfig[suggestion.targetField] = applyTokenToValue(
         nextConfig[suggestion.targetField],
         suggestion.token,
       );
-      nextConfig.linkedInputs = upsertLinkedInputEntry(
-        nextConfig,
-        suggestion,
-        true,
-      );
+      nextConfig.linkedInputs = upsertLinkedInputEntry(nextConfig, suggestion, true);
     }
 
-    return {
-      ...block,
-      config: nextConfig,
-    };
+    return { ...block, config: nextConfig };
   });
 }
 
@@ -1173,11 +1364,9 @@ export function removeFoundationArrowInputFromBlocks(
   connections: FoundationWorkflowConnectionLike[] = [],
   connectionId: string,
 ) {
-  const suggestion = createFoundationArrowInputSuggestions(
-    blocks,
-    connections,
-  ).find((item) => item.connectionId === connectionId);
-
+  const suggestion = createFoundationArrowInputSuggestions(blocks, connections).find(
+    (item) => item.connectionId === connectionId,
+  );
   if (!suggestion) return blocks;
 
   return blocks.map((block) => {
@@ -1192,9 +1381,6 @@ export function removeFoundationArrowInputFromBlocks(
       return entry.connectionId !== suggestion.connectionId;
     });
 
-    return {
-      ...block,
-      config: nextConfig,
-    };
+    return { ...block, config: nextConfig };
   });
 }

@@ -1,79 +1,224 @@
-import { useEffect, useState } from "react";
-
+import type { ChangeEvent, ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { foundationDataTypes } from "../../../foundation";
+import type { CustomToolBlock } from "../../../../domain/customToolTypes";
+import type { FoundationDataType } from "../../../foundation";
+import type { FoundationArrowInputSuggestion } from "../../../../runtime/foundationWorkflowRuntime";
+
+export type FoundationReferenceOption = {
+  id: string;
+  label: string;
+  dataType?: FoundationDataType | "unknown" | string;
+  sourceBlockId?: string;
+  sourcePortId?: string;
+  connected?: boolean;
+};
 
 export type FoundationConfigEditorProps = {
   blockId: string;
   config: Record<string, unknown>;
   onConfigChange: (config: Record<string, unknown>) => void;
+  referenceOptions?: FoundationReferenceOption[];
+  linkedInputSuggestions?: FoundationArrowInputSuggestion[];
 };
 
-export type SelectOption = {
-  value: string;
-  label: string;
-};
+export const dataTypeOptions = [
+  "string",
+  "number",
+  "boolean",
+  "json",
+  "array",
+  "list",
+  "dictionary",
+  "object",
+  "file",
+  "folder",
+  "void",
+  "unknown",
+];
+
+export const scopeOptions = ["local", "global"];
 
 export function updateFoundationConfig(
   config: Record<string, unknown>,
   onConfigChange: (config: Record<string, unknown>) => void,
   patch: Record<string, unknown>,
 ) {
-  onConfigChange({
-    ...config,
-    ...patch,
+  onConfigChange({ ...config, ...patch });
+}
+
+function configString(value: unknown, fallback = "") {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+function configNumberOrString(value: unknown, fallback = "") {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  return fallback;
+}
+
+function parseNumberOrReference(value: string) {
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+  const numberValue = Number(trimmed);
+  if (/^-?\d+(\.\d+)?$/.test(trimmed) && Number.isFinite(numberValue)) {
+    return numberValue;
+  }
+  return trimmed;
+}
+
+function normalizeReferenceOptions(
+  options?: FoundationReferenceOption[],
+  suggestions?: FoundationArrowInputSuggestion[],
+) {
+  const byId = new Map<string, FoundationReferenceOption>();
+
+  for (const option of options ?? []) {
+    if (!option.id) continue;
+    byId.set(option.id, option);
+  }
+
+  for (const suggestion of suggestions ?? []) {
+    const id = suggestion.sourceName || suggestion.token.replace(/^{{|}}$/g, "");
+    if (!id) continue;
+    byId.set(id, {
+      id,
+      label: `${suggestion.sourceLabel} → ${suggestion.targetFieldLabel}`,
+      dataType: "unknown",
+      sourceBlockId: suggestion.sourceBlockId,
+      connected: true,
+    });
+  }
+
+  return [...byId.values()].sort((left, right) => {
+    if (left.connected !== right.connected) return left.connected ? -1 : 1;
+    return left.id.localeCompare(right.id);
   });
 }
 
-export function getStringConfigValue(
-  value: unknown,
-  fallback = "",
-): string {
-  return typeof value === "string" ? value : fallback;
+function optionAcceptsType(
+  option: FoundationReferenceOption,
+  acceptedTypes?: readonly string[],
+) {
+  if (!acceptedTypes || acceptedTypes.length === 0) return true;
+  if (!option.dataType || option.dataType === "unknown") return true;
+  return acceptedTypes.includes(String(option.dataType));
 }
 
-export function getNumberConfigValue(
-  value: unknown,
-  fallback = 0,
-): number {
-  const parsed = typeof value === "number" ? value : Number(value);
+export function getCanvasReferenceOptions(blocks: CustomToolBlock[] = []) {
+  const options: FoundationReferenceOption[] = [];
 
-  return Number.isFinite(parsed) ? parsed : fallback;
+  for (const block of blocks) {
+    const config = block.config ?? {};
+    const blockType = String(block.type);
+
+    if (blockType === "io.input") {
+      const inputId = configString(config.inputId);
+      if (inputId) {
+        options.push({
+          id: inputId,
+          label: `${block.label || inputId} · input`,
+          dataType: configString(config.dataType, "unknown"),
+          sourceBlockId: block.id,
+          sourcePortId: "value",
+        });
+      }
+    }
+
+    if (blockType === "variable.create" || blockType === "variable.assign") {
+      const name = configString(config.name);
+      if (name) {
+        options.push({
+          id: name,
+          label: `${name} · variable`,
+          dataType: configString(config.dataType, "unknown"),
+          sourceBlockId: block.id,
+          sourcePortId: "value",
+        });
+      }
+    }
+
+    if (blockType === "constant.create") {
+      const name = configString(config.name);
+      if (name) {
+        options.push({
+          id: name,
+          label: `${name} · constant`,
+          dataType: configString(config.dataType, "unknown"),
+          sourceBlockId: block.id,
+          sourcePortId: "value",
+        });
+      }
+    }
+
+    if (blockType === "function.call") {
+      const assignTo = configString(config.assignTo);
+      if (assignTo) {
+        options.push({
+          id: assignTo,
+          label: `${assignTo} · function result`,
+          dataType: "unknown",
+          sourceBlockId: block.id,
+          sourcePortId: "result",
+        });
+      }
+    }
+
+    if (blockType === "math.operation" || blockType === "logic.compare") {
+      const resultName = configString(config.resultName);
+      if (resultName) {
+        options.push({
+          id: resultName,
+          label: `${block.label || resultName} · ${blockType === "math.operation" ? "math result" : "comparison result"}`,
+          dataType: blockType === "math.operation" ? "number" : "boolean",
+          sourceBlockId: block.id,
+          sourcePortId: "result",
+        });
+      }
+    }
+
+    if (blockType === "loop.for") {
+      const indexName = configString(config.indexName, "i");
+      if (indexName) {
+        options.push({
+          id: indexName,
+          label: `${block.label || indexName} · loop index`,
+          dataType: "number",
+          sourceBlockId: block.id,
+          sourcePortId: "index",
+        });
+      }
+    }
+  }
+
+  const unique = new Map(options.map((option) => [option.id, option]));
+  return [...unique.values()];
 }
 
-export function getBooleanConfigValue(
-  value: unknown,
-  fallback = false,
-): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-export function StringConfigField({
-  id,
+function FieldShell({
   label,
-  value,
-  onChange,
-  placeholder,
   description,
+  children,
 }: {
-  id: string;
   label: string;
-  value: unknown;
-  onChange: (value: string) => void;
-  placeholder?: string;
   description?: string;
+  children: ReactNode;
 }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        value={getStringConfigValue(value)}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-      />
+      <Label>{label}</Label>
+      {children}
       {description ? (
         <p className="text-xs text-muted-foreground">{description}</p>
       ) : null}
@@ -81,8 +226,36 @@ export function StringConfigField({
   );
 }
 
+export function StringConfigField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  description,
+  readOnly,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  description?: string;
+  readOnly?: boolean;
+}) {
+  return (
+    <FieldShell label={label} description={description}>
+      <Input
+        value={configString(value)}
+        onChange={(event: ChangeEvent<HTMLInputElement>) =>
+          onChange(event.target.value)
+        }
+        placeholder={placeholder}
+        readOnly={readOnly}
+      />
+    </FieldShell>
+  );
+}
+
 export function TextConfigField({
-  id,
   label,
   value,
   onChange,
@@ -90,7 +263,6 @@ export function TextConfigField({
   description,
   minHeightClassName = "min-h-24",
 }: {
-  id: string;
   label: string;
   value: unknown;
   onChange: (value: string) => void;
@@ -99,24 +271,42 @@ export function TextConfigField({
   minHeightClassName?: string;
 }) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+    <FieldShell label={label} description={description}>
       <Textarea
-        id={id}
-        value={getStringConfigValue(value)}
+        value={configString(value)}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className={minHeightClassName}
       />
-      {description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
+    </FieldShell>
+  );
+}
+
+export function BooleanConfigField({
+  label,
+  value,
+  onChange,
+  description,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: boolean) => void;
+  description?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border p-3">
+      <div className="space-y-1">
+        <Label>{label}</Label>
+        {description ? (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      <Switch checked={Boolean(value)} onCheckedChange={onChange} />
     </div>
   );
 }
 
 export function NumberConfigField({
-  id,
   label,
   value,
   onChange,
@@ -125,7 +315,6 @@ export function NumberConfigField({
   step,
   description,
 }: {
-  id: string;
   label: string;
   value: unknown;
   onChange: (value: number) => void;
@@ -135,167 +324,224 @@ export function NumberConfigField({
   description?: string;
 }) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+    <FieldShell label={label} description={description}>
       <Input
-        id={id}
         type="number"
+        value={typeof value === "number" ? value : Number(value ?? 0)}
         min={min}
         max={max}
         step={step}
-        value={getNumberConfigValue(value)}
-        onChange={(event) => {
-          const parsed = Number(event.target.value);
-          if (Number.isFinite(parsed)) onChange(parsed);
-        }}
+        onChange={(event) => onChange(Number(event.target.value))}
       />
-      {description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
-    </div>
-  );
-}
-
-export function BooleanConfigField({
-  id,
-  label,
-  checked,
-  onChange,
-  description,
-}: {
-  id: string;
-  label: string;
-  checked: unknown;
-  onChange: (value: boolean) => void;
-  description?: string;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      className="flex cursor-pointer items-start gap-3 rounded-lg border bg-background/60 p-3"
-    >
-      <input
-        id={id}
-        type="checkbox"
-        checked={getBooleanConfigValue(checked)}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 size-4 rounded border-input accent-primary"
-      />
-      <span className="space-y-1">
-        <span className="block text-sm font-medium">{label}</span>
-        {description ? (
-          <span className="block text-xs text-muted-foreground">
-            {description}
-          </span>
-        ) : null}
-      </span>
-    </label>
+    </FieldShell>
   );
 }
 
 export function SelectConfigField({
-  id,
   label,
   value,
   options,
   onChange,
   description,
 }: {
-  id: string;
   label: string;
   value: unknown;
-  options: readonly SelectOption[];
+  options: readonly string[];
   onChange: (value: string) => void;
   description?: string;
 }) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <select
-        id={id}
-        value={getStringConfigValue(value, options[0]?.value ?? "")}
-        onChange={(event) => onChange(event.target.value)}
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
+    <FieldShell label={label} description={description}>
+      <Select value={configString(value)} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select value" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FieldShell>
+  );
+}
+
+export function ReferenceSelectField({
+  label,
+  value,
+  onChange,
+  acceptedTypes,
+  description,
+  referenceOptions,
+  linkedInputSuggestions,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+  acceptedTypes?: readonly string[];
+  description?: string;
+  referenceOptions?: FoundationReferenceOption[];
+  linkedInputSuggestions?: FoundationArrowInputSuggestion[];
+}) {
+  const options = normalizeReferenceOptions(referenceOptions, linkedInputSuggestions).filter(
+    (option) => optionAcceptsType(option, acceptedTypes),
+  );
+  const currentValue = configString(value);
+  const connectedValue = options.find((option) => option.connected)?.id ?? "";
+  const displayValue = currentValue || connectedValue;
+
+  return (
+    <FieldShell label={label} description={description}>
+      <Select value={displayValue || "__manual__"} onValueChange={(next) => onChange(next === "__manual__" ? "" : next)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Choose a canvas value" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__manual__">Manual value</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={`${option.id}-${option.sourceBlockId ?? "canvas"}`} value={option.id}>
+              {option.connected ? "🔗 " : ""}{option.id} — {option.label}
+              {option.dataType ? ` (${option.dataType})` : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FieldShell>
+  );
+}
+
+export function ExpressionConfigField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  description,
+  acceptedTypes,
+  referenceOptions,
+  linkedInputSuggestions,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string | number) => void;
+  placeholder?: string;
+  description?: string;
+  acceptedTypes?: readonly string[];
+  referenceOptions?: FoundationReferenceOption[];
+  linkedInputSuggestions?: FoundationArrowInputSuggestion[];
+}) {
+  const currentValue = configNumberOrString(value);
+  const autoConnectedValue = normalizeReferenceOptions(referenceOptions, linkedInputSuggestions)
+    .filter((option) => optionAcceptsType(option, acceptedTypes))
+    .find((option) => option.connected)?.id ?? "";
+  const displayValue = currentValue || autoConnectedValue;
+
+  return (
+    <div className="space-y-3 rounded-xl border p-3">
+      <StringConfigField
+        label={label}
+        value={displayValue}
+        onChange={(next) => onChange(parseNumberOrReference(next))}
+        placeholder={placeholder}
+        description={description}
+      />
+      <ReferenceSelectField
+        label="Choose value from canvas"
+        value={configNumberOrString(value)}
+        onChange={(next) => onChange(next)}
+        acceptedTypes={acceptedTypes}
+        referenceOptions={referenceOptions}
+        linkedInputSuggestions={linkedInputSuggestions}
+        description="Choose an input, variable, constant, or function result from the canvas."
+      />
     </div>
   );
 }
 
-function formatJson(value: unknown, fallback: unknown) {
-  return JSON.stringify(value ?? fallback, null, 2);
+export function ArrayReferenceConfigField({
+  label,
+  value,
+  onChange,
+  description,
+  acceptedTypes,
+  referenceOptions,
+  linkedInputSuggestions,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string[]) => void;
+  description?: string;
+  acceptedTypes?: readonly string[];
+  referenceOptions?: FoundationReferenceOption[];
+  linkedInputSuggestions?: FoundationArrowInputSuggestion[];
+}) {
+  const values = Array.isArray(value)
+    ? value.map((item) => String(item))
+    : typeof value === "string" && value.trim()
+      ? [value.trim()]
+      : [];
+  const options = normalizeReferenceOptions(referenceOptions, linkedInputSuggestions).filter(
+    (option) => optionAcceptsType(option, acceptedTypes),
+  );
+
+  return (
+    <div className="space-y-3 rounded-xl border p-3">
+      <FieldShell label={label} description={description}>
+        <Textarea
+          value={values.join("\n")}
+          onChange={(event) =>
+            onChange(
+              event.target.value
+                .split("\n")
+                .map((item) => item.trim())
+                .filter(Boolean),
+            )
+          }
+          className="min-h-24 font-mono text-xs"
+          placeholder={'n\notherValue'}
+        />
+      </FieldShell>
+      <ReferenceSelectField
+        label="Add value from canvas"
+        value=""
+        acceptedTypes={acceptedTypes}
+        referenceOptions={options}
+        linkedInputSuggestions={linkedInputSuggestions}
+        onChange={(next) => {
+          if (!next) return;
+          onChange([...values.filter((item) => item !== next), next]);
+        }}
+      />
+    </div>
+  );
 }
 
 export function JsonConfigField({
-  id,
   label,
   value,
-  fallbackValue,
   onChange,
   description,
-  minHeightClassName = "min-h-28",
 }: {
-  id: string;
   label: string;
   value: unknown;
-  fallbackValue: unknown;
   onChange: (value: unknown) => void;
   description?: string;
-  minHeightClassName?: string;
 }) {
-  const [text, setText] = useState(() => formatJson(value, fallbackValue));
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setText(formatJson(value, fallbackValue));
-    setError(null);
-  }, [fallbackValue, value]);
-
-  const commitJson = () => {
-    try {
-      onChange(JSON.parse(text));
-      setError(null);
-    } catch {
-      setError("Invalid JSON. Keep this field as valid JSON before saving.");
-    }
-  };
-
+  const text = JSON.stringify(value ?? null, null, 2);
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+    <FieldShell label={label} description={description}>
       <Textarea
-        id={id}
         value={text}
-        onChange={(event) => setText(event.target.value)}
-        onBlur={commitJson}
-        spellCheck={false}
-        className={`${minHeightClassName} font-mono text-xs`}
+        onChange={(event) => {
+          try {
+            onChange(JSON.parse(event.target.value));
+          } catch {
+            onChange(event.target.value);
+          }
+        }}
+        className="min-h-28 font-mono text-xs"
       />
-      {error ? (
-        <p className="text-xs text-destructive">{error}</p>
-      ) : description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
-    </div>
+    </FieldShell>
   );
 }
-
-export const dataTypeOptions = foundationDataTypes.map((type) => ({
-  value: type,
-  label: type,
-}));
-
-export const scopeOptions = [
-  { value: "local", label: "Local" },
-  { value: "global", label: "Global" },
-  { value: "function", label: "Function" },
-  { value: "block", label: "Block" },
-];

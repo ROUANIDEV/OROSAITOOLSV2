@@ -1,32 +1,43 @@
-use serde_json::{Map, Number, Value};
+use serde_json::{json, Map, Number, Value};
 
 use super::context::FoundationRuntimeContext;
 
 pub fn string_value(config: &Map<String, Value>, key: &str) -> Option<String> {
-    config.get(key).and_then(|value| match value {
-        Value::String(text) => Some(text.clone()),
-        Value::Number(number) => Some(number.to_string()),
-        Value::Bool(boolean) => Some(boolean.to_string()),
+    match config.get(key) {
+        Some(Value::String(value)) => Some(value.trim().to_string()),
+        Some(Value::Number(value)) => Some(value.to_string()),
+        Some(Value::Bool(value)) => Some(value.to_string()),
         _ => None,
-    })
+    }
+    .filter(|value| !value.is_empty())
 }
 
-#[allow(dead_code)]
 pub fn bool_value(config: &Map<String, Value>, key: &str, fallback: bool) -> bool {
-    config.get(key).map_or(fallback, |value| match value {
-        Value::Bool(boolean) => *boolean,
-        Value::String(text) => matches!(text.trim().to_ascii_lowercase().as_str(), "true" | "yes" | "1"),
-        Value::Number(number) => number.as_i64().unwrap_or_default() != 0,
+    match config.get(key) {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::String(value)) => match value.trim().to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" => true,
+            "false" | "0" | "no" | "off" => false,
+            _ => fallback,
+        },
+        Some(Value::Number(value)) => value.as_i64().map(|value| value != 0).unwrap_or(fallback),
         _ => fallback,
-    })
+    }
 }
 
 pub fn number_value(config: &Map<String, Value>, key: &str, fallback: f64) -> f64 {
-    config.get(key).map_or(fallback, |value| match value {
-        Value::Number(number) => number.as_f64().unwrap_or(fallback),
-        Value::String(text) => text.trim().parse::<f64>().unwrap_or(fallback),
+    match config.get(key) {
+        Some(Value::Number(value)) => value.as_f64().unwrap_or(fallback),
+        Some(Value::String(value)) => value.trim().parse::<f64>().unwrap_or(fallback),
+        Some(Value::Bool(value)) => {
+            if *value {
+                1.0
+            } else {
+                0.0
+            }
+        }
         _ => fallback,
-    })
+    }
 }
 
 pub fn array_of_strings(config: &Map<String, Value>, key: &str) -> Vec<String> {
@@ -34,38 +45,47 @@ pub fn array_of_strings(config: &Map<String, Value>, key: &str) -> Vec<String> {
         Some(Value::Array(items)) => items
             .iter()
             .filter_map(|item| match item {
-                Value::String(text) => Some(text.clone()),
+                Value::String(value) => Some(value.trim().to_string()),
+                Value::Number(value) => Some(value.to_string()),
                 _ => None,
             })
+            .filter(|value| !value.is_empty())
+            .collect(),
+        Some(Value::String(value)) if !value.trim().is_empty() => value
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
             .collect(),
         _ => Vec::new(),
     }
 }
 
 pub fn lookup_runtime_value(context: &FoundationRuntimeContext, name: &str) -> Option<Value> {
+    let normalized = name.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+
+    let normalized = normalized
+        .strip_prefix("{{")
+        .and_then(|value| value.strip_suffix("}}"))
+        .map(str::trim)
+        .unwrap_or(normalized)
+        .strip_prefix('$')
+        .unwrap_or(normalized);
+
     context
         .variables
-        .get(name)
+        .get(normalized)
         .cloned()
-        .or_else(|| context.constants.get(name).cloned())
-        .or_else(|| context.outputs.get(name).cloned())
+        .or_else(|| context.constants.get(normalized).cloned())
+        .or_else(|| context.outputs.get(normalized).cloned())
 }
 
 pub fn resolve_runtime_value(context: &FoundationRuntimeContext, value: &Value) -> Value {
     match value {
-        Value::String(text) => {
-            let trimmed = text.trim();
-
-            if trimmed.starts_with("{{") && trimmed.ends_with("}}") {
-                let name = trimmed
-                    .trim_start_matches("{{")
-                    .trim_end_matches("}}")
-                    .trim();
-                return lookup_runtime_value(context, name).unwrap_or(Value::Null);
-            }
-
-            lookup_runtime_value(context, trimmed).unwrap_or_else(|| Value::String(text.clone()))
-        }
+        Value::String(raw) => resolve_runtime_string(context, raw),
         Value::Array(items) => Value::Array(
             items
                 .iter()
@@ -74,11 +94,48 @@ pub fn resolve_runtime_value(context: &FoundationRuntimeContext, value: &Value) 
         ),
         Value::Object(map) => Value::Object(
             map.iter()
-                .map(|(key, item)| (key.clone(), resolve_runtime_value(context, item)))
+                .map(|(key, value)| (key.clone(), resolve_runtime_value(context, value)))
                 .collect(),
         ),
-        _ => value.clone(),
+        other => other.clone(),
     }
+}
+
+pub fn resolve_runtime_string(context: &FoundationRuntimeContext, raw: &str) -> Value {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Value::String(String::new());
+    }
+
+    if let Some(value) = lookup_runtime_value(context, trimmed) {
+        return value;
+    }
+
+    if trimmed.starts_with("{{") && trimmed.ends_with("}}") {
+        return lookup_runtime_value(context, trimmed).unwrap_or(Value::Null);
+    }
+
+    if let Some(value) = parse_literal_string(trimmed) {
+        return value;
+    }
+
+    Value::String(raw.to_string())
+}
+
+pub fn parse_literal_string(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Some(Value::String(String::new()));
+    }
+    if matches!(trimmed, "true" | "false" | "null")
+        || trimmed.starts_with('{')
+        || trimmed.starts_with('[')
+        || is_number_like(trimmed)
+        || (trimmed.starts_with('"') && trimmed.ends_with('"'))
+    {
+        return serde_json::from_str(trimmed).ok();
+    }
+    None
 }
 
 pub fn coerce_typed_value(
@@ -88,113 +145,58 @@ pub fn coerce_typed_value(
     data_type: &str,
     value: Value,
 ) -> Option<Value> {
-    match data_type {
-        "unknown" | "json" => Some(value),
-        "string" => match value {
-            Value::String(_) => Some(value),
-            Value::Number(number) => Some(Value::String(number.to_string())),
-            Value::Bool(boolean) => Some(Value::String(boolean.to_string())),
-            Value::Null => Some(Value::String(String::new())),
-            _ => {
-                context.error(
-                    Some(block_id.to_string()),
-                    Some(field.to_string()),
-                    "Type mismatch: expected string.",
-                    Some("Use a text value or change the block data type.".to_string()),
-                );
-                None
-            }
-        },
-        "number" => match value {
-            Value::Number(_) => Some(value),
-            Value::String(text) => match text.trim().parse::<f64>() {
-                Ok(parsed) => Number::from_f64(parsed).map(Value::Number).or_else(|| {
-                    context.error(
-                        Some(block_id.to_string()),
-                        Some(field.to_string()),
-                        "Type mismatch: number value is not finite.",
-                        Some("Use a finite number like 12, 12.5, or -1.".to_string()),
-                    );
-                    None
-                }),
-                Err(_) => {
-                    context.error(
-                        Some(block_id.to_string()),
-                        Some(field.to_string()),
-                        format!("Type mismatch: expected number but received '{text}'."),
-                        Some("Use an unquoted number like 15, or change dataType to string.".to_string()),
-                    );
-                    None
-                }
-            },
-            _ => {
-                context.error(
-                    Some(block_id.to_string()),
-                    Some(field.to_string()),
-                    "Type mismatch: expected number.",
-                    Some("Use a numeric value or change the block data type.".to_string()),
-                );
-                None
-            }
-        },
-        "boolean" => match value {
-            Value::Bool(_) => Some(value),
-            Value::String(text) => match text.trim().to_ascii_lowercase().as_str() {
-                "true" => Some(Value::Bool(true)),
-                "false" => Some(Value::Bool(false)),
-                _ => {
-                    context.error(
-                        Some(block_id.to_string()),
-                        Some(field.to_string()),
-                        format!("Type mismatch: expected boolean but received '{text}'."),
-                        Some("Use true or false, or change the block data type.".to_string()),
-                    );
-                    None
-                }
-            },
-            _ => {
-                context.error(
-                    Some(block_id.to_string()),
-                    Some(field.to_string()),
-                    "Type mismatch: expected boolean.",
-                    Some("Use true/false or change the block data type.".to_string()),
-                );
-                None
-            }
-        },
+    match data_type.trim().to_ascii_lowercase().as_str() {
+        "unknown" | "json" | "object" => Some(value),
+        "string" | "text" => Some(Value::String(display_value(&value))),
+        "number" => coerce_number(value).or_else(|| {
+            context.error(
+                Some(block_id.to_string()),
+                Some(field.to_string()),
+                "Expected a number value.",
+                Some("Use a number, numeric string, variable reference, or arithmetic expression.".to_string()),
+            );
+            None
+        }),
+        "boolean" | "bool" => Some(Value::Bool(is_truthy(&value))),
         "array" | "list" => match value {
             Value::Array(_) => Some(value),
             _ => {
                 context.error(
                     Some(block_id.to_string()),
                     Some(field.to_string()),
-                    format!("Type mismatch: expected {data_type}."),
-                    Some("Use a JSON array like [1, 2, 3].".to_string()),
+                    "Expected an array/list value.",
+                    Some("Use JSON like [1, 2, 3] or a variable that contains an array.".to_string()),
                 );
                 None
             }
         },
-        "dictionary" | "object" => match value {
+        "dictionary" => match value {
             Value::Object(_) => Some(value),
             _ => {
                 context.error(
                     Some(block_id.to_string()),
                     Some(field.to_string()),
-                    format!("Type mismatch: expected {data_type}."),
-                    Some("Use a JSON object like {\"key\": \"value\"}.".to_string()),
+                    "Expected a dictionary/object value.",
+                    Some("Use JSON like {\"key\": \"value\"}.".to_string()),
                 );
                 None
             }
         },
-        other => {
-            context.warning(
-                Some(block_id.to_string()),
-                Some("dataType".to_string()),
-                format!("Unknown data type '{other}', keeping raw JSON value."),
-                Some("Add this data type to the frontend and Rust type registry before execution.".to_string()),
-            );
-            Some(value)
-        }
+        _ => Some(value),
+    }
+}
+
+pub fn coerce_number(value: Value) -> Option<Value> {
+    match value {
+        Value::Number(_) => Some(value),
+        Value::String(text) => text
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .and_then(Number::from_f64)
+            .map(Value::Number),
+        Value::Bool(value) => Some(json!(if value { 1 } else { 0 })),
+        _ => None,
     }
 }
 
@@ -204,17 +206,29 @@ pub fn value_to_key(value: &Value) -> String {
         Value::Number(number) => number.to_string(),
         Value::Bool(boolean) => boolean.to_string(),
         Value::Null => String::new(),
-        _ => value.to_string(),
+        other => other.to_string(),
+    }
+}
+
+pub fn display_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Null => String::new(),
+        other => other.to_string(),
     }
 }
 
 pub fn is_truthy(value: &Value) -> bool {
     match value {
-        Value::Bool(boolean) => *boolean,
-        Value::Number(number) => number.as_f64().unwrap_or_default() != 0.0,
-        Value::String(text) => !text.trim().is_empty() && text.trim() != "false" && text.trim() != "0",
+        Value::Bool(value) => *value,
+        Value::Number(value) => value.as_f64().map(|value| value != 0.0).unwrap_or(false),
+        Value::String(value) => !value.trim().is_empty() && value.trim() != "false" && value.trim() != "0",
         Value::Array(items) => !items.is_empty(),
         Value::Object(map) => !map.is_empty(),
         Value::Null => false,
     }
+}
+
+fn is_number_like(value: &str) -> bool {
+    value.parse::<i64>().is_ok() || value.parse::<f64>().is_ok()
 }

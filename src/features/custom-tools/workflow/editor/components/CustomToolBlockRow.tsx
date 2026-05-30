@@ -1,5 +1,4 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +8,7 @@ import {
   type CustomToolBlock,
   type CustomToolBlockType,
 } from "../../../domain/customToolTypes";
+import type { FoundationArrowInputSuggestion } from "../../../runtime/foundationWorkflowRuntime";
 import { createBlockConfigPreset } from "../../model/blockConfigPresets";
 import {
   customToolBlockTypeOptions,
@@ -21,6 +21,8 @@ type CustomToolBlockRowProps = {
   index: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  workflowBlocks?: CustomToolBlock[];
+  linkedInputSuggestions?: FoundationArrowInputSuggestion[];
   onChange: (block: CustomToolBlock) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -29,8 +31,30 @@ type CustomToolBlockRowProps = {
 
 function getExecutionModeLabel(block: CustomToolBlock) {
   if (block.executionMode) return block.executionMode;
-
   return isFoundationCustomToolBlockType(block.type) ? "model" : "runtime";
+}
+
+function getNameFieldLabel(type: CustomToolBlockType) {
+  if (type === "io.input") return "Input name";
+  if (type === "io.output") return "Output name";
+  return "Block name";
+}
+
+function getNameHelp(type: CustomToolBlockType) {
+  if (type === "io.input") {
+    return "This is the user-facing name shown in Run Rust Workflow and after publishing.";
+  }
+  if (type === "io.output") {
+    return "This is the user-facing result name shown after Run Rust Workflow and after publishing.";
+  }
+  return "Give this block a simple name so the canvas stays readable.";
+}
+
+function mirrorCanvasIoLabel(
+  block: CustomToolBlock,
+  label: string,
+): CustomToolBlock {
+  return { ...block, label };
 }
 
 export function CustomToolBlockRow({
@@ -38,9 +62,12 @@ export function CustomToolBlockRow({
   index,
   canMoveUp,
   canMoveDown,
+  workflowBlocks = [],
+  linkedInputSuggestions = [],
   onChange,
   onMoveUp,
   onMoveDown,
+  onRemove,
 }: CustomToolBlockRowProps) {
   const executionMode = getExecutionModeLabel(block);
 
@@ -55,98 +82,60 @@ export function CustomToolBlockRow({
   };
 
   return (
-    <div className="space-y-4 rounded-xl border bg-background/70 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold">Block #{index + 1}</p>
-            <Badge
-              variant={executionMode === "model" ? "secondary" : "outline"}
-              className="text-[10px]"
-            >
-              {executionMode}
-            </Badge>
-          </div>
-
-          <p className="text-xs text-muted-foreground">{block.type}</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <p className="hidden max-w-xs text-right text-xs text-muted-foreground sm:block">
-            Reorder sequence here. Delete from the canvas.
+    <div className="space-y-4 rounded-2xl border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Block #{index + 1}
           </p>
-
-          <div className="flex items-center gap-1 rounded-lg border bg-background/70 p-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={onMoveUp}
-              disabled={!canMoveUp}
-              aria-label="Move block up"
-              title="Move block up"
-            >
-              <ArrowUp className="size-4" aria-hidden="true" />
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={onMoveDown}
-              disabled={!canMoveDown}
-              aria-label="Move block down"
-              title="Move block down"
-            >
-              <ArrowDown className="size-4" aria-hidden="true" />
-            </Button>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{executionMode}</Badge>
+            <Badge variant="outline">{block.type}</Badge>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" disabled={!canMoveUp} onClick={onMoveUp}>
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" disabled={!canMoveDown} onClick={onMoveDown}>
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+          <Button variant="destructive" onClick={onRemove}>Remove</Button>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor={`${block.id}-label`}>Label</Label>
+          <Label>{getNameFieldLabel(block.type)}</Label>
           <Input
-            id={`${block.id}-label`}
             value={block.label}
-            onChange={(event) => onChange({ ...block, label: event.target.value })}
+            onChange={(event) => onChange(mirrorCanvasIoLabel(block, event.target.value))}
+            placeholder={block.type === "io.input" ? "Number input" : undefined}
           />
+          <p className="text-xs text-muted-foreground">{getNameHelp(block.type)}</p>
         </div>
-
         <div className="space-y-2">
-          <Label htmlFor={`${block.id}-type`}>Type</Label>
+          <Label>Block type</Label>
           <select
-            id={`${block.id}-type`}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             value={block.type}
             onChange={(event) => updateType(event.target.value as CustomToolBlockType)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {customToolBlockTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
-                {option.executionMode === "model" ? " · model" : ""}
+                {option.category} · {option.label}
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor={`${block.id}-description`}>Description</Label>
-        <Input
-          id={`${block.id}-description`}
-          value={block.description}
-          onChange={(event) =>
-            onChange({ ...block, description: event.target.value })
-          }
-        />
-      </div>
-
       <BlockConfigEditor
         blockId={block.id}
         blockType={block.type}
         config={block.config}
+        workflowBlocks={workflowBlocks}
+        linkedInputSuggestions={linkedInputSuggestions}
         onConfigChange={(config) => onChange({ ...block, config })}
       />
     </div>

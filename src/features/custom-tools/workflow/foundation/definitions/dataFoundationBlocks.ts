@@ -9,7 +9,7 @@ export const dataFoundationBlockDefinitions = [
     category: "data",
     summary: "Create a mutable value in the selected scope.",
     description:
-      "Represents variable creation with name, type, scope, and optional initial value.",
+      "Creates a named value that other blocks can read by connecting the Variable ref output or by choosing the variable name from canvas values.",
     defaultLabel: "Create variable",
     tags: ["variable", "mutable", "state"],
     visual: getFoundationVisualToken("data"),
@@ -28,10 +28,10 @@ export const dataFoundationBlockDefinitions = [
       }),
     ],
     defaultConfig: {
-      name: "value",
+      name: "result",
       scope: "local",
-      dataType: "string",
-      initialValue: "",
+      dataType: "number",
+      initialValue: 1,
       mutable: true,
     },
   },
@@ -41,7 +41,7 @@ export const dataFoundationBlockDefinitions = [
     category: "data",
     summary: "Update an existing mutable variable.",
     description:
-      "Represents assigning a new expression result to an existing variable.",
+      "Updates a variable using a value connected from another block. Use Math operation and Compare blocks instead of typing code expressions.",
     defaultLabel: "Assign variable",
     tags: ["variable", "assign", "mutation"],
     visual: getFoundationVisualToken("data"),
@@ -55,10 +55,48 @@ export const dataFoundationBlockDefinitions = [
       foundationOutput("assignedValue", "Assigned value", {
         dataType: "unknown",
       }),
+      foundationOutput("reference", "Variable ref", {
+        dataType: "unknown",
+      }),
     ],
     defaultConfig: {
-      name: "value",
-      expression: "",
+      name: "result",
+      value: "",
+    },
+  },
+  {
+    kind: "variable.update",
+    title: "Update variable",
+    category: "data",
+    summary: "Update a stored value with one connected value.",
+    description:
+      "Keeps one named value and updates it with add, subtract, multiply, divide, modulo, or power. This is easier than separate create variable, math operation, and assign variable blocks for counters and running totals.",
+    defaultLabel: "Update variable",
+    tags: ["variable", "update", "counter", "accumulator", "running total"],
+    visual: getFoundationVisualToken("data"),
+    inputs: [
+      foundationInput("operand", "Value to use", {
+        dataType: "number",
+        required: true,
+        description: "The value used to update the stored variable. For factorial, connect the loop index here.",
+      }),
+    ],
+    outputs: [
+      foundationOutput("value", "Updated value", {
+        dataType: "number",
+        description: "The new stored value after the update.",
+      }),
+      foundationOutput("reference", "Variable ref", {
+        dataType: "number",
+        description: "The variable name that can feed an Output block.",
+      }),
+    ],
+    defaultConfig: {
+      name: "result",
+      dataType: "number",
+      initialValue: 1,
+      operation: "multiply",
+      operand: "",
     },
   },
   {
@@ -66,8 +104,7 @@ export const dataFoundationBlockDefinitions = [
     title: "Create constant",
     category: "data",
     summary: "Create an immutable named value.",
-    description:
-      "Represents a constant that cannot be reassigned after creation.",
+    description: "Represents a constant that cannot be reassigned after creation.",
     defaultLabel: "Create constant",
     tags: ["constant", "immutable", "config"],
     visual: getFoundationVisualToken("data"),
@@ -81,6 +118,9 @@ export const dataFoundationBlockDefinitions = [
       foundationOutput("constant", "Constant", {
         dataType: "unknown",
       }),
+      foundationOutput("reference", "Constant ref", {
+        dataType: "unknown",
+      }),
     ],
     defaultConfig: {
       name: "CONST_VALUE",
@@ -92,13 +132,18 @@ export const dataFoundationBlockDefinitions = [
     kind: "expression.value",
     title: "Value expression",
     category: "data",
-    summary: "Create a literal or computed expression.",
+    summary: "Create a literal or selected canvas value.",
     description:
-      "Represents a reusable expression that can feed variables, conditions, function calls, or collections.",
-    defaultLabel: "Expression",
+      "Represents a reusable value. For operations, prefer Math operation and Compare blocks.",
+    defaultLabel: "Value",
     tags: ["expression", "value", "literal"],
     visual: getFoundationVisualToken("data"),
-    inputs: [],
+    inputs: [
+      foundationInput("value", "Value", {
+        dataType: "unknown",
+        required: false,
+      }),
+    ],
     outputs: [
       foundationOutput("result", "Result", {
         dataType: "unknown",
@@ -114,8 +159,7 @@ export const dataFoundationBlockDefinitions = [
     title: "Template expression",
     category: "data",
     summary: "Render text from variables, inputs, and block outputs.",
-    description:
-      "Represents a text template with placeholders like {{variableName}}.",
+    description: "Represents a text template with placeholders like {{variableName}}.",
     defaultLabel: "Template",
     tags: ["expression", "template", "text"],
     visual: getFoundationVisualToken("data"),

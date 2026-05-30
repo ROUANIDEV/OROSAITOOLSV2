@@ -6,6 +6,25 @@ use super::types::{
     FoundationDiagnosticSeverity, FoundationRunRequest, FoundationRunResult, FoundationRuntimeBlock,
 };
 
+fn bool_config(config: &Map<String, Value>, key: &str) -> bool {
+    match config.get(key) {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::String(value)) => matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "true" | "yes" | "1"
+        ),
+        _ => false,
+    }
+}
+
+fn should_skip_top_level(block: &FoundationRuntimeBlock) -> bool {
+    bool_config(&block.config, "__skipTopLevel")
+        || matches!(
+            block.config.get("__workflowRole"),
+            Some(Value::String(role)) if role == "body"
+        )
+}
+
 pub fn run_foundation_workflow(request: FoundationRunRequest) -> FoundationRunResult {
     let mut context = FoundationRuntimeContext::default();
 
@@ -18,6 +37,10 @@ pub fn run_foundation_workflow(request: FoundationRunRequest) -> FoundationRunRe
     let block_lookup = create_block_lookup(&request.blocks);
 
     for block in &request.blocks {
+        if should_skip_top_level(block) {
+            continue;
+        }
+
         execute_block(&mut context, block, &block_lookup, &request.options);
 
         if request.options.fail_fast && context.has_errors() {

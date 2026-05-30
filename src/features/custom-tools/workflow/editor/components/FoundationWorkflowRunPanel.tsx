@@ -1,30 +1,19 @@
 import {
+  Activity,
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
-  Clock,
   Copy,
   FileText,
-  GitBranch,
   ListChecks,
   Route,
   Sparkles,
-  Terminal,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 import {
-  createFoundationOutputTimeline,
   createFoundationWorkflowOutputSummary,
   type FoundationRuntimeDiagnostic,
   type FoundationRuntimeTraceItem,
@@ -39,6 +28,15 @@ type FoundationWorkflowRunPanelProps = {
   report: FoundationWorkflowRunReport | null;
   error?: string | null;
   onClose?: () => void;
+};
+
+type TraceGroup = {
+  key: string;
+  status: string;
+  summary: string;
+  blockId: string;
+  blockType: string;
+  count: number;
 };
 
 function stringifyJson(value: unknown) {
@@ -61,139 +59,270 @@ function normalizeTraceBlockType(trace: FoundationRuntimeTraceItem) {
   return trace.blockType ?? trace.block_type ?? "unknown";
 }
 
-function statusClasses(ok?: boolean) {
-  if (ok) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-900";
-  return "border-destructive/40 bg-destructive/10 text-destructive";
+function statusTone(status: string) {
+  if (status === "error") return "border-destructive/30 bg-destructive/10 text-destructive";
+  if (status === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (status === "executed") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  return "border-muted bg-muted/60 text-muted-foreground";
 }
 
 function outputRoleLabel(item: FoundationWorkflowOutputItem) {
-  if (item.role === "terminal") return "Workflow output";
-  if (item.role === "blockOrder") return "Block output";
-  if (item.role === "cycleFallback") return "Cycle/intermediate output";
-  return "Intermediate output";
+  if (item.isWorkflowOutput) return "Workflow result";
+  if (item.role === "terminal") return "Terminal value";
+  return "Intermediate";
 }
 
-function outputRoleClasses(item: FoundationWorkflowOutputItem) {
-  if (item.isWorkflowOutput) {
-    return "border-primary/50 bg-primary/10 text-primary";
+function groupTrace(trace: FoundationRuntimeTraceItem[]): TraceGroup[] {
+  const groups: TraceGroup[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const item of trace) {
+    const blockId = normalizeTraceBlockId(item);
+    const blockType = normalizeTraceBlockType(item);
+    const status = item.status ?? "planned";
+    const summary = item.summary ?? "Step completed.";
+    const key = `${blockId}|${blockType}|${status}|${summary}`;
+    const existingIndex = indexByKey.get(key);
+
+    if (typeof existingIndex === "number") {
+      groups[existingIndex].count += 1;
+      continue;
+    }
+
+    indexByKey.set(key, groups.length);
+    groups.push({ key, status, summary, blockId, blockType, count: 1 });
   }
 
-  return "border-muted-foreground/20 bg-muted/50 text-muted-foreground";
+  return groups;
+}
+
+function blockLabelById(report: FoundationWorkflowRunReport | null, blockId: string) {
+  return report?.foundationBlocks.find((block) => block.id === blockId)?.label ?? blockId;
+}
+
+function blockById(report: FoundationWorkflowRunReport | null, blockId: string | null) {
+  if (!report || !blockId) return null;
+  return report.foundationBlocks.find((block) => block.id === blockId) ?? null;
+}
+
+function traceShowsExecuted(report: FoundationWorkflowRunReport | null, blockId: string | null) {
+  if (!report || !blockId) return false;
+  const trace = report.result.trace ?? report.result.steps ?? [];
+  return trace.some((item) => normalizeTraceBlockId(item) === blockId && item.status === "executed");
+}
+
+function resultHasOutputForBlock(report: FoundationWorkflowRunReport | null, blockId: string | null) {
+  if (!report || !blockId) return false;
+  const outputs = report.result.outputs;
+  return Boolean(outputs && Object.prototype.hasOwnProperty.call(outputs, blockId));
+}
+
+function shouldHideResolvedRuntimeDiagnostic(
+  diagnostic: FoundationRuntimeDiagnostic,
+  report: FoundationWorkflowRunReport | null,
+  outputSummary: ReturnType<typeof createFoundationWorkflowOutputSummary> | null,
+) {
+  const blockId = normalizeDiagnosticBlockId(diagnostic);
+  const block = blockById(report, blockId);
+  const field = diagnostic.field ?? "";
+  if (!block || !blockId) return false;
+
+  if (block.type === "variable.update" && field === "initialValue") {
+    return traceShowsExecuted(report, blockId) || resultHasOutputForBlock(report, blockId);
+  }
+
+  if (block.type === "io.output" && (field === "value" || field === "expression")) {
+    return (
+      outputSummary?.workflowOutputs.some((item) => item.blockId === blockId) ||
+      resultHasOutputForBlock(report, blockId)
+    );
+  }
+
+  return false;
+}
+
+function filterRuntimeDiagnostics(
+  diagnostics: FoundationRuntimeDiagnostic[],
+  report: FoundationWorkflowRunReport | null,
+  outputSummary: ReturnType<typeof createFoundationWorkflowOutputSummary> | null,
+) {
+  const seen = new Set<string>();
+  return diagnostics.filter((diagnostic) => {
+    if (shouldHideResolvedRuntimeDiagnostic(diagnostic, report, outputSummary)) return false;
+
+    const key = [
+      normalizeDiagnosticBlockId(diagnostic) ?? "workflow",
+      diagnostic.field ?? "field",
+      diagnostic.severity ?? "error",
+      diagnostic.message ?? "message",
+    ].join("|");
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function MiniStat({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="rounded-md border bg-background px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-2xl border bg-background/70 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         {label}
+      </p>
+      <p className="mt-1 text-xl font-semibold">{String(value ?? 0)}</p>
+    </div>
+  );
+}
+
+function RunningAnimation() {
+  return (
+    <div className="overflow-hidden rounded-3xl border bg-linear-to-br from-primary/15 via-background to-background p-4 shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+            <Sparkles className="h-5 w-5 animate-pulse" />
+            <span className="absolute inset-0 rounded-2xl border border-primary/30 animate-ping" />
+          </span>
+          <div>
+            <p className="font-semibold">Running your workflow</p>
+            <p className="text-sm text-muted-foreground">
+              Rust is moving through the connected blocks.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-1.5" aria-hidden="true">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.2s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.1s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-primary" />
+        </div>
       </div>
-      <div className="mt-1 text-sm font-semibold text-foreground">
-        {String(value ?? 0)}
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+        <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
       </div>
     </div>
   );
 }
 
-function CodeBox({ value }: { value: unknown }) {
+function OutputCard({ item, index }: { item: FoundationWorkflowOutputItem; index: number }) {
   return (
-    <pre className="max-h-72 overflow-auto rounded-md border bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
-      {stringifyJson(value)}
-    </pre>
-  );
-}
-
-function OutputCard({
-  item,
-  index,
-  important = false,
-}: {
-  item: FoundationWorkflowOutputItem;
-  index: number;
-  important?: boolean;
-}) {
-  return (
-    <div
-      className={
-        important
-          ? "rounded-xl border-2 border-primary/50 bg-background p-4 shadow-sm"
-          : "rounded-lg border bg-background p-3"
-      }
+    <article
+      className={[
+        "rounded-3xl border p-4 shadow-sm",
+        item.isWorkflowOutput
+          ? "border-primary/35 bg-primary/10"
+          : "border-muted bg-background/70",
+      ].join(" ")}
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
-              #{index + 1} {item.label}
-            </span>
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${outputRoleClasses(
-                item,
-              )}`}
-            >
-              {outputRoleLabel(item)}
-            </span>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {item.blockType} · output key <span className="font-mono">{item.primaryKey}</span>
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">
+            #{index + 1} {item.label}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {item.blockType} · {item.primaryKey}
+          </p>
         </div>
-
-        <div className="rounded-md border bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
-          in {item.incomingArrowCount} · out {item.outgoingArrowCount}
-        </div>
+        <span
+          className={[
+            "rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide",
+            item.isWorkflowOutput
+              ? "bg-primary/15 text-primary"
+              : "bg-muted text-muted-foreground",
+          ].join(" ")}
+        >
+          {outputRoleLabel(item)}
+        </span>
       </div>
-
-      <pre
-        className={
-          important
-            ? "mt-3 whitespace-pre-wrap wrap-break-word rounded-md bg-primary/5 p-4 font-sans text-lg font-semibold text-foreground"
-            : "mt-3 whitespace-pre-wrap wrap-break-word rounded bg-muted/50 p-2 text-xs text-foreground"
-        }
-      >
+      <div className="mt-3 rounded-2xl bg-background/80 px-4 py-3 text-2xl font-semibold">
         {item.displayValue}
-      </pre>
-
-      <div className="mt-2 text-xs text-muted-foreground">{item.reason}</div>
-    </div>
+      </div>
+    </article>
   );
 }
 
-function ExecutionEdgeCard({ edge, index }: { edge: FoundationWorkflowExecutionEdge; index: number }) {
+function DiagnosticCard({
+  diagnostic,
+  report,
+}: {
+  diagnostic: FoundationRuntimeDiagnostic;
+  report: FoundationWorkflowRunReport | null;
+}) {
+  const blockId = normalizeDiagnosticBlockId(diagnostic);
   return (
-    <div className="relative overflow-hidden rounded-xl border bg-linear-to-br from-background via-background to-primary/5 p-3 shadow-sm">
-      <div className="pointer-events-none absolute -right-10 -top-10 size-24 rounded-full bg-primary/10 blur-2xl" />
-      <div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0 space-y-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-            Data flow #{index + 1}
-          </div>
-          <div className="truncate text-sm font-semibold text-foreground">
-            {edge.fromLabel}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {edge.fromType} · {edge.fromPortId || "output"}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-primary">
-          <div className="h-px w-10 bg-primary/50" />
-          <Sparkles className="size-4" />
-          <ArrowRight className="size-4" />
-          <div className="h-px w-10 bg-primary/50" />
-        </div>
-
-        <div className="min-w-0 space-y-1 text-left md:text-right">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-            Input target
-          </div>
-          <div className="truncate text-sm font-semibold text-foreground">
-            {edge.toLabel}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {edge.toType} · {edge.toPortId || "input"}
-          </div>
-        </div>
+    <article className="rounded-2xl border border-destructive/25 bg-destructive/10 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive">
+          {diagnostic.severity ?? "error"}
+        </span>
+        {blockId ? (
+          <span className="text-xs text-muted-foreground">
+            {blockLabelById(report, blockId)}
+          </span>
+        ) : null}
+        {diagnostic.field ? (
+          <code className="rounded-md bg-background/70 px-2 py-0.5 text-[11px]">
+            {diagnostic.field}
+          </code>
+        ) : null}
       </div>
+      <p className="mt-2 font-semibold">{diagnostic.message ?? "The block needs setup."}</p>
+      {diagnostic.help ? (
+        <p className="mt-1 text-xs text-muted-foreground">{diagnostic.help}</p>
+      ) : null}
+    </article>
+  );
+}
+
+function EdgePill({ edge }: { edge: FoundationWorkflowExecutionEdge }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full border bg-background/70 px-2.5 py-1 text-xs text-muted-foreground">
+      <span className="truncate font-medium text-foreground">{edge.fromLabel}</span>
+      <span className="text-muted-foreground">{edge.fromPortId || "output"}</span>
+      <span>→</span>
+      <span className="truncate font-medium text-foreground">{edge.toLabel}</span>
+      <span className="text-muted-foreground">{edge.toPortId || "input"}</span>
+    </span>
+  );
+}
+
+function CompactTrace({
+  groups,
+  report,
+}: {
+  groups: TraceGroup[];
+  report: FoundationWorkflowRunReport | null;
+}) {
+  if (groups.length === 0) {
+    return (
+      <p className="rounded-2xl border bg-background/70 p-3 text-sm text-muted-foreground">
+        No execution steps were returned.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-2 md:grid-cols-2">
+      {groups.slice(0, 12).map((group) => (
+        <article
+          key={group.key}
+          className={["rounded-2xl border p-3 text-sm", statusTone(group.status)].join(" ")}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold">{blockLabelById(report, group.blockId)}</span>
+            {group.count > 1 ? (
+              <span className="rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-bold">
+                × {group.count}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs opacity-90">{group.summary}</p>
+        </article>
+      ))}
+      {groups.length > 12 ? (
+        <p className="rounded-2xl border bg-background/70 p-3 text-sm text-muted-foreground">
+          {groups.length - 12} more grouped step{groups.length - 12 === 1 ? "" : "s"} hidden.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -206,36 +335,30 @@ export function FoundationWorkflowRunPanel({
   onClose,
 }: FoundationWorkflowRunPanelProps) {
   const [copied, setCopied] = useState(false);
-
-  const timeline = useMemo(
-    () => (report ? createFoundationOutputTimeline(report) : []),
-    [report],
-  );
   const outputSummary = useMemo(
     () => (report ? createFoundationWorkflowOutputSummary(report) : null),
     [report],
   );
+  const trace = report?.result.trace ?? report?.result.steps ?? [];
+  const traceGroups = useMemo(() => groupTrace(trace), [trace]);
+  const rawDiagnostics = report?.result.diagnostics ?? [];
+  const diagnostics = useMemo(
+    () => filterRuntimeDiagnostics(rawDiagnostics, report, outputSummary),
+    [rawDiagnostics, report, outputSummary],
+  );
+  const executedCount = report?.result.executedCount ?? report?.result.executed_count ?? 0;
+  const plannedCount = report?.result.plannedCount ?? report?.result.planned_count ?? 0;
+  const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
+  const errorCount = diagnostics.filter((item) => item.severity !== "warning").length;
+  const workflowOutputs = outputSummary?.workflowOutputs ?? [];
+  const intermediateOutputs = outputSummary?.intermediateOutputs ?? [];
+  const ok = Boolean(report) && errorCount === 0 && (Boolean(report?.result.ok) || workflowOutputs.length > 0);
+  const executionEdges = report?.executionPlan.edges ?? [];
 
   if (!open && !isRunning && !report && !error) return null;
 
-  const diagnostics = report?.result.diagnostics ?? [];
-  const trace = report?.result.trace ?? report?.result.steps ?? [];
-  const ok = report?.result.ok;
-  const executedCount =
-    report?.result.executedCount ?? report?.result.executed_count ?? 0;
-  const plannedCount =
-    report?.result.plannedCount ?? report?.result.planned_count ?? 0;
-  const warningCount =
-    report?.result.warningCount ?? report?.result.warning_count ?? 0;
-  const errorCount = report?.result.errorCount ?? report?.result.error_count ?? 0;
-  const executionEdges = report?.executionPlan.edges ?? [];
-  const ignoredEdges = report?.executionPlan.ignoredEdges ?? [];
-  const workflowOutputs = outputSummary?.workflowOutputs ?? [];
-  const intermediateOutputs = outputSummary?.intermediateOutputs ?? [];
-
   const copyReport = async () => {
     if (!report) return;
-
     try {
       await navigator.clipboard.writeText(stringifyJson(report));
       setCopied(true);
@@ -246,301 +369,176 @@ export function FoundationWorkflowRunPanel({
   };
 
   return (
-    <Card className="mt-3 w-full border-2 border-primary/40 bg-background shadow-md">
-      <CardHeader className="space-y-3 pb-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Terminal className="size-4" />
-              Rust Workflow Run Result
-            </CardTitle>
-            <CardDescription>
-              The workflow no longer guesses one final value from the last block. It shows terminal arrow outputs, or all emitted outputs when no arrows are connected.
-            </CardDescription>
-          </div>
-
+    <section className="rounded-3xl border bg-card/70 p-4 shadow-xl backdrop-blur-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
           <div className="flex items-center gap-2">
-            {report ? (
-              <Button type="button" variant="outline" size="sm" onClick={copyReport}>
-                <Copy className="mr-2 size-3.5" />
-                {copied ? "Copied" : "Copy report"}
-              </Button>
-            ) : null}
-            {onClose ? (
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-                <X className="mr-2 size-3.5" />
-                Hide
-              </Button>
-            ) : null}
+            <Activity className="h-4 w-4 text-primary" />
+            <h2 className="font-semibold">Rust Workflow Run</h2>
           </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A simple run summary. Repeated loop steps are grouped so the result stays readable.
+          </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          {report ? (
+            <Button type="button" variant="outline" size="sm" onClick={copyReport}>
+              <Copy className="mr-2 h-3.5 w-3.5" />
+              {copied ? "Copied" : "Copy report"}
+            </Button>
+          ) : null}
+          {onClose ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              <X className="mr-2 h-3.5 w-3.5" />
+              Hide
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
-        {isRunning ? (
-          <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            <Clock className="size-4 animate-pulse" />
-            Running foundation blocks through Rust...
-          </div>
-        ) : null}
+      <div className="mt-4 space-y-4">
+        {isRunning ? <RunningAnimation /> : null}
 
         {error ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <div className="flex items-start gap-2 font-medium">
-              <AlertCircle className="mt-0.5 size-4" />
-              <span>Rust workflow run failed</span>
+          <div className="rounded-3xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertCircle className="h-4 w-4" />
+              Rust workflow run failed
             </div>
-            <div className="mt-2 whitespace-pre-wrap text-xs">{error}</div>
+            <p className="mt-1">{error}</p>
           </div>
         ) : null}
 
         {report ? (
-          <div className={`rounded-md border px-3 py-2 text-sm ${statusClasses(ok)}`}>
-            <div className="flex items-center gap-2 font-semibold">
-              {ok ? <CheckCircle2 className="size-4" /> : <AlertCircle className="size-4" />}
-              <span>{ok ? "ok true" : "ok false"}</span>
-            </div>
-          </div>
-        ) : null}
-      </CardHeader>
-
-      {report ? (
-        <CardContent className="space-y-4">
-          <section className="rounded-lg border-2 border-primary/50 bg-primary/5 p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-primary">
-                  <FileText className="size-4" />
-                  Workflow Outputs
+          <>
+            <div
+              className={[
+                "rounded-3xl border p-4",
+                ok
+                  ? "border-emerald-500/30 bg-emerald-500/10"
+                  : "border-destructive/30 bg-destructive/10",
+              ].join(" ")}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {ok ? (
+                    <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="h-6 w-6 text-destructive" />
+                  )}
+                  <div>
+                    <p className="font-semibold">
+                      {ok ? "Workflow completed" : "Workflow needs attention"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {ok
+                        ? "Rust executed the connected model successfully."
+                        : "Open the setup of the blocks listed below to fix the remaining issue."}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {outputSummary?.explanation}
-                </div>
-              </div>
-              <div className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                {outputSummary?.modeLabel ?? "outputs"}
+                <span className="rounded-full bg-background/70 px-3 py-1 text-xs font-semibold">
+                  {ok ? "ready for dry run" : "not ready yet"}
+                </span>
               </div>
             </div>
 
-            {workflowOutputs.length > 0 ? (
-              <div className="mt-3 space-y-3">
-                {workflowOutputs.map((item, index) => (
-                  <OutputCard
-                    key={`${item.blockId}-${item.primaryKey}`}
-                    item={item}
-                    index={index}
-                    important
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-3 rounded-md border bg-background p-3 text-sm text-muted-foreground">
-                No workflow outputs were returned by Rust. Check diagnostics and Raw Rust Result below.
-              </div>
-            )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MiniStat label="Executed" value={executedCount} />
+              <MiniStat label="Waiting" value={plannedCount} />
+              <MiniStat label="Errors" value={errorCount} />
+              <MiniStat label="Warnings" value={warningCount} />
+            </div>
 
-            {intermediateOutputs.length > 0 ? (
-              <details className="mt-3 rounded-md border bg-background p-3">
-                <summary className="cursor-pointer text-sm font-semibold">
-                  Intermediate outputs feeding other blocks ({intermediateOutputs.length})
-                </summary>
-                <div className="mt-3 space-y-2">
-                  {intermediateOutputs.map((item, index) => (
-                    <OutputCard
-                      key={`${item.blockId}-${item.primaryKey}-intermediate`}
-                      item={item}
-                      index={index}
+            <div className="rounded-3xl border bg-background/55 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold">Result</h3>
+                </div>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  {workflowOutputs.length || intermediateOutputs.length} value{workflowOutputs.length + intermediateOutputs.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {workflowOutputs.length > 0 ? (
+                  workflowOutputs.map((item, index) => (
+                    <OutputCard key={`${item.blockId}-${item.primaryKey}`} item={item} index={index} />
+                  ))
+                ) : (
+                  <p className="rounded-2xl border bg-background/70 p-3 text-sm text-muted-foreground">
+                    No Output block produced a value yet. Check the block setup section below.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {diagnostics.length > 0 ? (
+              <div className="rounded-3xl border bg-background/55 p-4">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-destructive" />
+                  <h3 className="font-semibold">Things to fix</h3>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {diagnostics.slice(0, 8).map((diagnostic, index) => (
+                    <DiagnosticCard
+                      key={`${normalizeDiagnosticBlockId(diagnostic) ?? "diagnostic"}-${diagnostic.field ?? index}`}
+                      diagnostic={diagnostic}
+                      report={report}
                     />
                   ))}
                 </div>
-              </details>
-            ) : null}
-          </section>
-
-          <section className="rounded-xl border bg-linear-to-br from-primary/10 via-background to-background p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                  <GitBranch className="size-4" />
-                  Execution route
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Order mode: <span className="font-medium text-foreground">{report.orderLabel}</span>
-                </div>
-              </div>
-              <div className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                {executionEdges.length} active arrow{executionEdges.length === 1 ? "" : "s"}
-              </div>
-            </div>
-
-            {report.executionPlan.hasCycle ? (
-              <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900">
-                Cycle detected. Blocks in the cycle were appended after the sorted arrow order so Rust can still run.
+                {diagnostics.length > 8 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {diagnostics.length - 8} more issue{diagnostics.length - 8 === 1 ? "" : "s"} hidden in the raw report.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
-            {executionEdges.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {executionEdges.map((edge, index) => (
-                  <ExecutionEdgeCard key={edge.id} edge={edge} index={index} />
-                ))}
+            <details className="rounded-3xl border bg-background/55 p-4" open={false}>
+              <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold">
+                <Route className="h-4 w-4 text-primary" />
+                Connection route
+              </summary>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {executionEdges.length > 0 ? (
+                  executionEdges.map((edge) => <EdgePill key={edge.id} edge={edge} />)
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No model arrows were used for ordering.
+                  </p>
+                )}
               </div>
-            ) : (
-              <div className="mt-3 rounded-md border bg-background p-3 text-sm text-muted-foreground">
-                No foundation-to-foundation arrows were found, so execution used the current block order.
+            </details>
+
+            <details className="rounded-3xl border bg-background/55 p-4" open={false}>
+              <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold">
+                <FileText className="h-4 w-4 text-primary" />
+                Compact execution trace
+              </summary>
+              <div className="mt-3">
+                <CompactTrace groups={traceGroups} report={report} />
               </div>
-            )}
+            </details>
 
-            {ignoredEdges.length > 0 ? (
-              <details className="mt-3 rounded-md border bg-background p-3">
-                <summary className="cursor-pointer text-sm font-semibold">
-                  Ignored visual arrows ({ignoredEdges.length})
-                </summary>
-                <div className="mt-3 space-y-2">
-                  {ignoredEdges.map((edge) => (
-                    <div key={edge.id} className="rounded border bg-muted/30 p-2 text-xs text-muted-foreground">
-                      {edge.fromLabel} → {edge.toLabel}: {edge.reason}
-                    </div>
-                  ))}
-                </div>
-              </details>
-            ) : null}
-          </section>
+            <details className="rounded-3xl border bg-background/55 p-4" open={false}>
+              <summary className="cursor-pointer list-none font-semibold">Raw Rust Result</summary>
+              <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-black/80 p-3 text-xs text-white">
+                {stringifyJson(report.result)}
+              </pre>
+            </details>
 
-          <section className="grid gap-2 sm:grid-cols-5">
-            <MiniStat label="Executed" value={executedCount} />
-            <MiniStat label="Planned" value={plannedCount} />
-            <MiniStat label="Errors" value={errorCount} />
-            <MiniStat label="Warnings" value={warningCount} />
-            <MiniStat label="Skipped UI blocks" value={report.skippedBlocks.length} />
-          </section>
-
-          <section className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <ListChecks className="size-4" />
-              Full output timeline
-            </div>
-
-            {timeline.length > 0 ? (
-              <div className="space-y-2">
-                {timeline.map((item, index) => (
-                  <div
-                    key={item.blockId}
-                    className="rounded-md border bg-background p-3 text-sm"
-                  >
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="font-medium">
-                        #{index + 1} {item.label}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {item.blockType} · {item.primaryKey}
-                      </div>
-                    </div>
-                    <pre className="mt-2 whitespace-pre-wrap wrap-break-word rounded bg-muted/50 p-2 text-xs text-foreground">
-                      {item.displayValue}
-                    </pre>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-                Rust returned no block outputs. This usually means the engine stopped before executing, the block type was not foundation, or the output object is empty.
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-2">
-            <div className="text-sm font-semibold">Variables</div>
-            <CodeBox value={report.result.variables ?? {}} />
-          </section>
-
-          <section className="space-y-2">
-            <div className="text-sm font-semibold">Constants</div>
-            <CodeBox value={report.result.constants ?? {}} />
-          </section>
-
-          {diagnostics.length > 0 ? (
-            <section className="space-y-2">
-              <div className="text-sm font-semibold">Diagnostics</div>
-              <div className="space-y-2">
-                {diagnostics.map((diagnostic, index) => (
-                  <div key={index} className="rounded-md border bg-background p-3 text-sm">
-                    <div className="font-medium">
-                      {(diagnostic.severity ?? "info").toUpperCase()}: {diagnostic.message}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      block: {normalizeDiagnosticBlockId(diagnostic) ?? "n/a"}
-                      {diagnostic.field ? ` · field: ${diagnostic.field}` : ""}
-                    </div>
-                    {diagnostic.help ? (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {diagnostic.help}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          <section className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Route className="size-4" />
-              Execution trace
-            </div>
-            {trace.length > 0 ? (
-              <div className="space-y-2">
-                {trace.map((item, index) => (
-                  <div key={`${normalizeTraceBlockId(item)}-${index}`} className="rounded-md border bg-background p-3 text-sm">
-                    <div className="font-medium">
-                      {item.status ?? "planned"}: {item.summary ?? "No summary."}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {normalizeTraceBlockId(item)} · {normalizeTraceBlockType(item)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-                No execution trace returned.
-              </div>
-            )}
-          </section>
-
-          {report.skippedBlocks.length > 0 ? (
-            <section className="space-y-2">
-              <div className="text-sm font-semibold">Skipped non-foundation blocks</div>
-              <div className="space-y-2">
-                {report.skippedBlocks.map((block) => (
-                  <div key={block.id} className="rounded-md border bg-background p-3 text-sm">
-                    <div className="font-medium">{block.label}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {block.type} · {block.reason}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          <details className="rounded-md border bg-background p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Raw Rust Result
-            </summary>
-            <div className="mt-3">
-              <CodeBox value={report.result} />
-            </div>
-          </details>
-
-          <details className="rounded-md border bg-background p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Sent Payload
-            </summary>
-            <div className="mt-3">
-              <CodeBox value={report.payload} />
-            </div>
-          </details>
-        </CardContent>
-      ) : null}
-    </Card>
+            <details className="rounded-3xl border bg-background/55 p-4" open={false}>
+              <summary className="cursor-pointer list-none font-semibold">Sent Payload</summary>
+              <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-black/80 p-3 text-xs text-white">
+                {stringifyJson(report.payload)}
+              </pre>
+            </details>
+          </>
+        ) : null}
+      </div>
+    </section>
   );
 }

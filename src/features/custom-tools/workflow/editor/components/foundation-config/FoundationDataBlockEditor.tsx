@@ -2,6 +2,7 @@ import type { CustomToolFoundationBlockType } from "../../../../domain/customToo
 import {
   BooleanConfigField,
   dataTypeOptions,
+  ExpressionConfigField,
   JsonConfigField,
   scopeOptions,
   SelectConfigField,
@@ -16,10 +17,11 @@ type FoundationDataBlockEditorProps = FoundationConfigEditorProps & {
 };
 
 export function FoundationDataBlockEditor({
-  blockId,
   blockType,
   config,
   onConfigChange,
+  referenceOptions,
+  linkedInputSuggestions,
 }: FoundationDataBlockEditorProps) {
   const update = (patch: Record<string, unknown>) => {
     updateFoundationConfig(config, onConfigChange, patch);
@@ -28,118 +30,157 @@ export function FoundationDataBlockEditor({
   switch (blockType) {
     case "variable.create":
       return (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
           <StringConfigField
-            id={`${blockId}-name`}
             label="Variable name"
             value={config.name}
             onChange={(name) => update({ name })}
-            placeholder="customerName"
+            placeholder="result"
           />
           <SelectConfigField
-            id={`${blockId}-scope`}
             label="Scope"
             value={config.scope}
             options={scopeOptions}
             onChange={(scope) => update({ scope })}
           />
           <SelectConfigField
-            id={`${blockId}-data-type`}
             label="Data type"
             value={config.dataType}
             options={dataTypeOptions}
             onChange={(dataType) => update({ dataType })}
           />
           <BooleanConfigField
-            id={`${blockId}-mutable`}
-            label="Mutable variable"
-            checked={config.mutable}
+            label="Mutable"
+            value={config.mutable}
             onChange={(mutable) => update({ mutable })}
-            description="Disable this when the value should behave like a read-only variable."
+            description="Turn this off only when the value should be read-only."
           />
-          <div className="md:col-span-2">
-            <TextConfigField
-              id={`${blockId}-initial-value`}
-              label="Initial value / expression"
-              value={config.initialValue}
-              onChange={(initialValue) => update({ initialValue })}
-              placeholder={'inputs.sourceFolder or "hello"'}
-              description="Keep this as a simple expression for now. Later we will validate it with the model compiler."
-            />
-          </div>
+          <ExpressionConfigField
+            label="Initial value"
+            value={config.initialValue}
+            onChange={(initialValue) => update({ initialValue })}
+            acceptedTypes={
+              typeof config.dataType === "string" ? [config.dataType] : undefined
+            }
+            referenceOptions={referenceOptions}
+            linkedInputSuggestions={linkedInputSuggestions}
+            placeholder="1"
+            description="Use a literal value or connect another block into the Initial value port."
+          />
         </div>
       );
 
     case "variable.assign":
       return (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
           <StringConfigField
-            id={`${blockId}-name`}
             label="Variable name"
             value={config.name}
             onChange={(name) => update({ name })}
-            placeholder="value"
+            placeholder="result"
           />
-          <TextConfigField
-            id={`${blockId}-expression`}
-            label="New value expression"
-            value={config.expression}
-            onChange={(expression) => update({ expression })}
-            placeholder="item.path"
+          <ExpressionConfigField
+            label="New value"
+            value={config.value ?? config.expression}
+            onChange={(value) => update({ value, expression: undefined })}
+            referenceOptions={referenceOptions}
+            linkedInputSuggestions={linkedInputSuggestions}
+            placeholder="Connect Math operation → Result here"
+            description="For block-only tools, connect a Math/Compare/Input output into the New value port instead of typing code."
+          />
+        </div>
+      );
+
+    case "variable.update":
+      return (
+        <div className="space-y-4">
+          <StringConfigField
+            label="Variable name"
+            value={config.name}
+            onChange={(name) => update({ name })}
+            placeholder="result"
+          />
+          <SelectConfigField
+            label="Data type"
+            value={config.dataType}
+            options={dataTypeOptions}
+            onChange={(dataType) => update({ dataType })}
+          />
+          <ExpressionConfigField
+            label="Start value"
+            value={config.initialValue}
+            onChange={(initialValue) => update({ initialValue })}
+            acceptedTypes={
+              typeof config.dataType === "string" ? [config.dataType] : undefined
+            }
+            referenceOptions={referenceOptions}
+            linkedInputSuggestions={linkedInputSuggestions}
+            placeholder="1"
+            description="The first value used before the loop starts. Use 1 for multiplication/factorial, 0 for sums."
+          />
+          <SelectConfigField
+            label="Operation"
+            value={config.operation ?? config.operator}
+            options={["add", "subtract", "multiply", "divide", "modulo", "power"]}
+            onChange={(operation) => update({ operation, operator: undefined })}
+          />
+          <ExpressionConfigField
+            label="Value to use"
+            value={config.operand ?? config.value}
+            onChange={(operand) => update({ operand, value: undefined })}
+            acceptedTypes={["number"]}
+            referenceOptions={referenceOptions}
+            linkedInputSuggestions={linkedInputSuggestions}
+            placeholder="Connect loop index here"
+            description="Connect the number that updates the stored value. For factorial, connect For loop → Index."
           />
         </div>
       );
 
     case "constant.create":
       return (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
           <StringConfigField
-            id={`${blockId}-name`}
             label="Constant name"
             value={config.name}
             onChange={(name) => update({ name })}
-            placeholder="API_TIMEOUT_MS"
+            placeholder="MAX_ITEMS"
           />
           <SelectConfigField
-            id={`${blockId}-data-type`}
             label="Data type"
             value={config.dataType}
             options={dataTypeOptions}
             onChange={(dataType) => update({ dataType })}
           />
-          <div className="md:col-span-2">
-            <JsonConfigField
-              id={`${blockId}-value`}
-              label="Constant value"
-              value={config.value}
-              fallbackValue=""
-              onChange={(value) => update({ value })}
-              description={'Use JSON syntax, for example: "text", 15, true, [], or {}.'}
-            />
-          </div>
+          <JsonConfigField
+            label="Value"
+            value={config.value}
+            onChange={(value) => update({ value })}
+            description={'Use JSON syntax, for example: "text", 15, true, [], or {}.'}
+          />
         </div>
       );
 
     case "expression.value":
       return (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
           <SelectConfigField
-            id={`${blockId}-data-type`}
-            label="Result type"
+            label="Data type"
             value={config.dataType}
             options={dataTypeOptions}
             onChange={(dataType) => update({ dataType })}
           />
-          <div className="md:col-span-2">
-            <TextConfigField
-              id={`${blockId}-expression`}
-              label="Expression"
-              value={config.expression}
-              onChange={(expression) => update({ expression })}
-              placeholder="inputs.name.toUpperCase()"
-              minHeightClassName="min-h-32"
-            />
-          </div>
+          <ExpressionConfigField
+            label="Value"
+            value={config.expression}
+            onChange={(expression) => update({ expression })}
+            acceptedTypes={
+              typeof config.dataType === "string" ? [config.dataType] : undefined
+            }
+            referenceOptions={referenceOptions}
+            linkedInputSuggestions={linkedInputSuggestions}
+            placeholder="Connect or choose a value"
+          />
         </div>
       );
 
@@ -147,26 +188,17 @@ export function FoundationDataBlockEditor({
       return (
         <div className="space-y-4">
           <TextConfigField
-            id={`${blockId}-template`}
             label="Template"
             value={config.template}
             onChange={(template) => update({ template })}
-            placeholder="Hello {{inputs.name}}"
-            description="Use {{variableName}} placeholders. Runtime binding will be added later."
+            placeholder="Hello {{name}}"
             minHeightClassName="min-h-32"
           />
           <SelectConfigField
-            id={`${blockId}-missing-value-strategy`}
             label="Missing value strategy"
             value={config.missingValueStrategy}
-            options={[
-              { value: "empty-string", label: "Empty string" },
-              { value: "keep-placeholder", label: "Keep placeholder" },
-              { value: "throw-error", label: "Throw error" },
-            ]}
-            onChange={(missingValueStrategy) =>
-              update({ missingValueStrategy })
-            }
+            options={["empty", "keep-token", "error"]}
+            onChange={(missingValueStrategy) => update({ missingValueStrategy })}
           />
         </div>
       );

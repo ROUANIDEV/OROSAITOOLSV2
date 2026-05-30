@@ -9,16 +9,24 @@ import {
 import type { WorkflowBlockLayout } from "../graph/workflowCanvasLayout";
 
 export type WorkflowInputPortSide = "left" | "top" | "bottom";
+export type WorkflowPortKind = "control" | "data" | "scope";
 
 export type WorkflowInputPort = {
   id: string;
   label: string;
   side: WorkflowInputPortSide;
+  kind: WorkflowPortKind;
+  dataType?: string;
+  required?: boolean;
+  description?: string;
 };
 
 export type WorkflowOutputPort = {
   id: string;
   label: string;
+  kind: WorkflowPortKind;
+  dataType?: string;
+  description?: string;
 };
 
 export type WorkflowBlockPorts = {
@@ -31,20 +39,53 @@ export type WorkflowPortTarget = {
   portId: string;
 };
 
+export type WorkflowPortConnectionPulse = {
+  fromBlockId: string;
+  fromPortId: string;
+  toBlockId: string;
+  toPortId: string;
+  token: number;
+};
+
 function input(
   id: string,
   label: string,
   side: WorkflowInputPortSide,
+  options: Partial<Omit<WorkflowInputPort, "id" | "label" | "side">> = {},
 ): WorkflowInputPort {
-  return { id, label, side };
+  return {
+    id,
+    label,
+    side,
+    kind: options.kind ?? "data",
+    dataType: options.dataType,
+    required: options.required,
+    description: options.description,
+  };
 }
 
-function output(id: string, label: string): WorkflowOutputPort {
-  return { id, label };
+function output(
+  id: string,
+  label: string,
+  options: Partial<Omit<WorkflowOutputPort, "id" | "label">> = {},
+): WorkflowOutputPort {
+  return {
+    id,
+    label,
+    kind: options.kind ?? "data",
+    dataType: options.dataType,
+    description: options.description,
+  };
+}
+
+function toPortKind(port: FoundationBlockPort): WorkflowPortKind {
+  if (port.role === "control") return "control";
+  if (port.role === "scope") return "scope";
+  return "data";
 }
 
 function formatFoundationPortLabel(port: FoundationBlockPort) {
-  return port.dataType ? `${port.label} (${port.dataType})` : port.label;
+  return port.dataType ? `${port.label} · ${port.dataType}` : port.label;
 }
 
 function getFoundationInputPortSide(
@@ -52,8 +93,15 @@ function getFoundationInputPortSide(
 ): WorkflowInputPortSide {
   if (port.role === "control") return "top";
   if (port.role === "scope") return "bottom";
-
   return "left";
+}
+
+function hasInputPort(ports: WorkflowInputPort[], id: string) {
+  return ports.some((port) => port.id === id);
+}
+
+function hasOutputPort(ports: WorkflowOutputPort[], id: string) {
+  return ports.some((port) => port.id === id);
 }
 
 function getFoundationBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
@@ -62,15 +110,41 @@ function getFoundationBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
   }
 
   const definition = getFoundationBlockDefinition(block.type);
+  const inputs = definition.inputs.map((port) =>
+    input(port.id, formatFoundationPortLabel(port), getFoundationInputPortSide(port), {
+      kind: toPortKind(port),
+      dataType: port.dataType,
+      required: port.required,
+      description: port.description,
+    }),
+  );
+  const outputs = definition.outputs.map((port) =>
+    output(port.id, formatFoundationPortLabel(port), {
+      kind: toPortKind(port),
+      dataType: port.dataType,
+      description: port.description,
+    }),
+  );
 
-  return {
-    inputs: definition.inputs.map((port) =>
-      input(port.id, formatFoundationPortLabel(port), getFoundationInputPortSide(port)),
-    ),
-    outputs: definition.outputs.map((port) =>
-      output(port.id, formatFoundationPortLabel(port)),
-    ),
-  };
+  if (!hasInputPort(inputs, "run")) {
+    inputs.unshift(
+      input("run", "Run", "top", {
+        kind: "control",
+        description: "Connect a previous block's Next/Completed output here to run this block after it.",
+      }),
+    );
+  }
+
+  if (!hasOutputPort(outputs, "next")) {
+    outputs.push(
+      output("next", "Next", {
+        kind: "control",
+        description: "Connect this to another block's Run input to run it next.",
+      }),
+    );
+  }
+
+  return { inputs, outputs };
 }
 
 export function getBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
@@ -81,67 +155,72 @@ export function getBlockPorts(block: CustomToolBlock): WorkflowBlockPorts {
   switch (block.type) {
     case "file.glob":
       return {
-        inputs: [input("folder", "Folder", "left")],
-        outputs: [output("files", "Files"), output("fileCount", "Count")],
+        inputs: [input("folder", "Folder", "left", { dataType: "folder" })],
+        outputs: [
+          output("files", "Files", { dataType: "array" }),
+          output("fileCount", "Count", { dataType: "number" }),
+        ],
       };
-
     case "file.read":
       return {
         inputs: [
-          input("file", "File", "left"),
-          input("source", "Source", "top"),
+          input("file", "File", "left", { dataType: "file" }),
+          input("source", "Source", "top", { kind: "control" }),
         ],
-        outputs: [output("content", "Content"), output("path", "Path")],
+        outputs: [
+          output("content", "Content", { dataType: "text" }),
+          output("path", "Path", { dataType: "file" }),
+        ],
       };
-
     case "text.template":
       return {
         inputs: [
-          input("template", "Template", "left"),
-          input("inputs", "Inputs", "top"),
-          input("outputs", "Outputs", "bottom"),
+          input("template", "Template", "left", { dataType: "text" }),
+          input("inputs", "Inputs", "top", { kind: "control" }),
+          input("outputs", "Outputs", "bottom", { kind: "scope" }),
         ],
-        outputs: [output("text", "Text")],
+        outputs: [output("text", "Text", { dataType: "text" })],
       };
-
     case "python.code":
       return {
         inputs: [
-          input("stdin", "JSON stdin", "left"),
-          input("context", "Context", "top"),
+          input("stdin", "JSON stdin", "left", { dataType: "json" }),
+          input("context", "Context", "top", { kind: "control" }),
         ],
         outputs: [
-          output("json", "JSON"),
-          output("stdout", "Stdout"),
-          output("stderr", "Stderr"),
+          output("json", "JSON", { dataType: "json" }),
+          output("stdout", "Stdout", { dataType: "text" }),
+          output("stderr", "Stderr", { dataType: "text" }),
         ],
       };
-
     case "safety.preview":
       return {
         inputs: [
-          input("content", "Content", "left"),
-          input("target", "Target", "top"),
+          input("content", "Content", "left", { dataType: "text" }),
+          input("target", "Target", "top", { kind: "control" }),
         ],
-        outputs: [output("preview", "Preview")],
+        outputs: [output("preview", "Preview", { dataType: "object" })],
       };
-
     case "file.appendText":
       return {
         inputs: [
-          input("file", "File", "left"),
-          input("text", "Text", "top"),
-          input("confirmation", "Confirm", "bottom"),
+          input("file", "File", "left", { dataType: "file" }),
+          input("text", "Text", "top", { dataType: "text" }),
+          input("confirmation", "Confirm", "bottom", { kind: "scope" }),
         ],
-        outputs: [output("bytesAppended", "Bytes"), output("status", "Status")],
+        outputs: [
+          output("bytesAppended", "Bytes", { dataType: "number" }),
+          output("status", "Status", { dataType: "text" }),
+        ],
       };
-
     case "safety.confirm":
       return {
-        inputs: [input("preview", "Preview", "left")],
-        outputs: [output("confirmed", "Confirmed"), output("message", "Message")],
+        inputs: [input("preview", "Preview", "left", { dataType: "object" })],
+        outputs: [
+          output("confirmed", "Confirmed", { dataType: "boolean" }),
+          output("message", "Message", { dataType: "text" }),
+        ],
       };
-
     default:
       return {
         inputs: [input("input", "Input", "left")],
@@ -159,7 +238,6 @@ function getSidePorts(
 
 function getEvenPosition(index: number, count: number) {
   if (count <= 1) return 0.5;
-
   return (index + 1) / (count + 1);
 }
 
@@ -187,11 +265,7 @@ export function getInputPortAnchor(
   const position = getEvenPosition(sideIndex, sidePorts.length);
 
   if (port.side === "top") {
-    return {
-      x: layout.x + layout.width * position,
-      y: layout.y,
-      side: port.side,
-    };
+    return { x: layout.x + layout.width * position, y: layout.y, side: port.side };
   }
 
   if (port.side === "bottom") {
@@ -202,11 +276,7 @@ export function getInputPortAnchor(
     };
   }
 
-  return {
-    x: layout.x,
-    y: layout.y + layout.height * position,
-    side: port.side,
-  };
+  return { x: layout.x, y: layout.y + layout.height * position, side: port.side };
 }
 
 export function getOutputPortAnchor(
@@ -233,14 +303,13 @@ export function getInputPortHitTargets(
 ) {
   return getBlockPorts(block).inputs.map((port) => {
     const anchor = getInputPortAnchor(block, layout, port.id);
-
     return {
       blockId: block.id,
       portId: port.id,
       label: port.label,
       x: anchor.x,
       y: anchor.y,
-      radius: 18,
+      radius: 10,
     };
   });
 }

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
 import type { CustomToolBlock } from "../../domain/customToolTypes";
 
 type TestRunBlockOutputsProps = {
@@ -7,10 +7,9 @@ type TestRunBlockOutputsProps = {
   blocks?: CustomToolBlock[];
 };
 
-type ReferenceOption = { label: string; value: string };
-
 function stringifyOutput(value: unknown) {
   if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
   try {
     return JSON.stringify(value, null, 2);
   } catch {
@@ -21,104 +20,84 @@ function stringifyOutput(value: unknown) {
 function getOutputKind(value: unknown) {
   if (typeof value === "string") return "text";
   if (typeof value === "number" || typeof value === "boolean") return typeof value;
-  if (value === null) return "empty";
+  if (value === null || typeof value === "undefined") return "empty";
   if (Array.isArray(value)) return "array";
   return "json";
 }
 
-function createReferenceOptions(blockId: string, value: unknown): ReferenceOption[] {
-  const options = [{ label: "Copy block ref", value: `{{outputs.${blockId}}}` }];
+function outputIdFromBlock(block: CustomToolBlock) {
+  const raw = block.config?.outputId;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : block.id;
+}
 
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    const firstKey = Object.keys(value)[0];
-    if (firstKey) {
-      options.push({
-        label: `Copy ${firstKey} ref`,
-        value: `{{outputs.${blockId}.${firstKey}}}`,
-      });
-    }
-  }
-
-  return options;
+function outputLabelFromBlock(block: CustomToolBlock) {
+  return block.label || outputIdFromBlock(block);
 }
 
 export function TestRunBlockOutputs({
   outputs,
   blocks = [],
 }: TestRunBlockOutputsProps) {
-  const [copiedReference, setCopiedReference] = useState("");
-  const blockLabelById = useMemo(() => {
-    return new Map(blocks.map((block) => [block.id, block.label]));
-  }, [blocks]);
+  const outputBlocks = useMemo(
+    () => blocks.filter((block) => block.type === "io.output"),
+    [blocks],
+  );
 
-  const entries = Object.entries(outputs).filter(([, value]) => {
-    return value !== undefined;
-  });
+  if (outputBlocks.length > 0) {
+    return (
+      <div className="space-y-3">
+        <div>
+          <h4 className="font-semibold">Workflow outputs</h4>
+          <p className="text-sm text-muted-foreground">
+            These are the user-facing output fields from your Output blocks.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {outputBlocks.map((block) => {
+            const outputId = outputIdFromBlock(block);
+            const value = outputs[outputId];
+            const hasValue = Object.prototype.hasOwnProperty.call(outputs, outputId);
+            return (
+              <div key={block.id} className="rounded-2xl border bg-card p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{outputLabelFromBlock(block)}</p>
+                    <p className="text-xs text-muted-foreground">{outputId}</p>
+                  </div>
+                  <Badge variant="secondary">
+                    {hasValue ? getOutputKind(value) : "waiting"}
+                  </Badge>
+                </div>
+                <pre className="mt-3 max-h-48 overflow-auto rounded-xl bg-muted p-3 text-sm">
+                  {hasValue ? stringifyOutput(value) : "Run Rust Workflow to see this result."}
+                </pre>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
-  const copyReference = (reference: string) => {
-    if (!navigator.clipboard) return;
-    void navigator.clipboard.writeText(reference).then(() => {
-      setCopiedReference(reference);
-    });
-  };
-
+  const entries = Object.entries(outputs).filter(([, value]) => value !== undefined);
   if (entries.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      <div>
-        <h4 className="text-sm font-medium">Block outputs</h4>
-        <p className="text-sm text-muted-foreground">
-          Use these values in later templates with outputs references.
-        </p>
-      </div>
-
-      {entries.map(([blockId, value]) => {
-        const label = blockLabelById.get(blockId) ?? "Unknown block";
-        const referenceOptions = createReferenceOptions(blockId, value);
-        const previewReference =
-          referenceOptions[referenceOptions.length - 1].value;
-
-        return (
-          <div key={blockId} className="space-y-3 rounded-lg border p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <p className="text-sm font-medium">{label}</p>
-                <p className="break-all font-mono text-xs text-muted-foreground">
-                  {blockId}
-                </p>
-              </div>
-              <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-                {getOutputKind(value)}
-              </span>
+      <h4 className="font-semibold">Run results</h4>
+      <div className="grid gap-3 md:grid-cols-2">
+        {entries.map(([key, value]) => (
+          <div key={key} className="rounded-2xl border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-medium">{key}</p>
+              <Badge variant="secondary">{getOutputKind(value)}</Badge>
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              {referenceOptions.map((referenceOption) => (
-                <Button
-                  key={referenceOption.value}
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => copyReference(referenceOption.value)}
-                >
-                  {copiedReference === referenceOption.value
-                    ? "Copied"
-                    : referenceOption.label}
-                </Button>
-              ))}
-            </div>
-
-            <p className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs">
-              {previewReference}
-            </p>
-
-            <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+            <pre className="mt-3 max-h-48 overflow-auto rounded-xl bg-muted p-3 text-sm">
               {stringifyOutput(value)}
             </pre>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }

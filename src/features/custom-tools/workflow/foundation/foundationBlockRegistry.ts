@@ -3,6 +3,8 @@ import {
   controlFlowFoundationBlockDefinitions,
   dataFoundationBlockDefinitions,
   functionFoundationBlockDefinitions,
+  ioFoundationBlockDefinitions,
+  operatorFoundationBlockDefinitions,
 } from "./definitions";
 import {
   foundationBlockCategories,
@@ -18,20 +20,21 @@ export type FoundationBlockGroup = {
 };
 
 export const foundationBlockDefinitions = [
+  ...ioFoundationBlockDefinitions,
   ...dataFoundationBlockDefinitions,
+  ...operatorFoundationBlockDefinitions,
   ...functionFoundationBlockDefinitions,
   ...controlFlowFoundationBlockDefinitions,
   ...collectionFoundationBlockDefinitions,
 ] satisfies readonly FoundationBlockDefinition[];
 
-export const foundationBlockDefinitionsByKind =
-  foundationBlockDefinitions.reduce(
-    (definitions, definition) => {
-      definitions[definition.kind] = definition;
-      return definitions;
-    },
-    {} as Record<FoundationBlockKind, FoundationBlockDefinition>,
-  );
+export const foundationBlockDefinitionsByKind = foundationBlockDefinitions.reduce(
+  (definitions, definition) => {
+    definitions[definition.kind] = definition;
+    return definitions;
+  },
+  {} as Record<FoundationBlockKind, FoundationBlockDefinition>,
+);
 
 export function isFoundationBlockKind(
   value: unknown,

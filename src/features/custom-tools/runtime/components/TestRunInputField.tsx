@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { File, FolderOpen } from "lucide-react";
-
+import { CheckSquare, File, FolderOpen, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-
 import { selectCustomToolPath } from "../files/picker/selectCustomToolPath";
 import type { CustomToolInput } from "../../domain/customToolTypes";
 import type { TestInputValues } from "../state/testRunTypes";
@@ -16,15 +14,18 @@ type TestRunInputFieldProps = {
 };
 
 function stringifyValue(value: TestInputValues[string]) {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
   return "";
+}
+
+function fieldHelp(input: CustomToolInput) {
+  if (input.description) return input.description;
+  if (input.type === "file") return "Choose or paste a file path.";
+  if (input.type === "folder") return "Choose or paste a folder path.";
+  if (input.type === "number") return "Enter a number for this run.";
+  if (input.type === "boolean") return "Turn this on or off for this run.";
+  return "Enter a value for this run.";
 }
 
 export function TestRunInputField({
@@ -36,12 +37,9 @@ export function TestRunInputField({
   const stringValue = stringifyValue(value);
 
   const choosePath = async () => {
-    if (input.type !== "file" && input.type !== "folder") {
-      return;
-    }
+    if (input.type !== "file" && input.type !== "folder") return;
 
     setPickerError("");
-
     try {
       const selectedPath = await selectCustomToolPath({
         mode: input.type,
@@ -50,54 +48,64 @@ export function TestRunInputField({
             ? `Select folder for ${input.label}`
             : `Select file for ${input.label}`,
       });
-
-      if (selectedPath) {
-        onValueChange(selectedPath);
-      }
+      if (selectedPath) onValueChange(selectedPath);
     } catch (error) {
       setPickerError(
-        error instanceof Error
-          ? error.message
-          : "Unable to open the native picker.",
+        error instanceof Error ? error.message : "Unable to open the picker.",
       );
     }
   };
 
   if (input.type === "boolean") {
+    const checked = value === true || stringValue === "true";
     return (
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={value === true}
-          onChange={(event) => onValueChange(event.target.checked)}
-        />
-        <span>{input.label}</span>
-      </label>
+      <div className="space-y-2 rounded-2xl border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-medium">{input.label}</p>
+            <p className="text-xs text-muted-foreground">{fieldHelp(input)}</p>
+          </div>
+          <Button
+            type="button"
+            variant={checked ? "default" : "outline"}
+            onClick={() => onValueChange(!checked)}
+          >
+            {checked ? (
+              <CheckSquare className="mr-2 h-4 w-4" />
+            ) : (
+              <Square className="mr-2 h-4 w-4" />
+            )}
+            {checked ? "True" : "False"}
+          </Button>
+        </div>
+      </div>
     );
   }
 
   if (input.type === "number") {
     return (
-      <label className="block space-y-2 text-sm">
+      <label className="block space-y-2 rounded-2xl border bg-card p-4 text-sm">
         <span className="font-medium">{input.label}</span>
         <Input
           type="number"
           value={stringValue}
           onChange={(event) => onValueChange(Number(event.target.value))}
-          placeholder={input.description}
+          placeholder="5"
         />
+        <span className="block text-xs text-muted-foreground">{fieldHelp(input)}</span>
       </label>
     );
   }
 
   if (input.type === "textarea") {
     return (
-      <label className="block space-y-2 text-sm">
+      <label className="block space-y-2 rounded-2xl border bg-card p-4 text-sm">
         <span className="font-medium">{input.label}</span>
         <Textarea
           value={stringValue}
           onChange={(event) => onValueChange(event.target.value)}
-          placeholder={input.description}
+          placeholder={fieldHelp(input)}
+          className="min-h-28"
         />
       </label>
     );
@@ -105,16 +113,15 @@ export function TestRunInputField({
 
   if (input.type === "file" || input.type === "folder") {
     const isFolder = input.type === "folder";
-
     return (
-      <div className="space-y-2 text-sm">
+      <div className="space-y-2 rounded-2xl border bg-card p-4 text-sm">
         <label className="block space-y-2">
           <span className="font-medium">{input.label}</span>
           <div className="flex gap-2">
             <Input
               value={stringValue}
               onChange={(event) => onValueChange(event.target.value)}
-              placeholder={input.description}
+              placeholder={fieldHelp(input)}
             />
             <Button type="button" variant="outline" onClick={choosePath}>
               {isFolder ? (
@@ -126,7 +133,6 @@ export function TestRunInputField({
             </Button>
           </div>
         </label>
-
         {pickerError ? (
           <p className="text-xs text-destructive">{pickerError}</p>
         ) : null}
@@ -135,12 +141,12 @@ export function TestRunInputField({
   }
 
   return (
-    <label className="block space-y-2 text-sm">
+    <label className="block space-y-2 rounded-2xl border bg-card p-4 text-sm">
       <span className="font-medium">{input.label}</span>
       <Input
         value={stringValue}
         onChange={(event) => onValueChange(event.target.value)}
-        placeholder={input.description}
+        placeholder={fieldHelp(input)}
       />
     </label>
   );
